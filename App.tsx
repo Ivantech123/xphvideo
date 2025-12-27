@@ -62,12 +62,12 @@ interface HomeProps {
   userMode: UserMode;
   currentView: 'home' | 'models' | 'categories' | 'favorites' | 'history';
   onOpenLegal: () => void;
+  searchQuery: string;
 }
 
-const MainContent: React.FC<HomeProps> = ({ onVideoClick, userMode, currentView, onOpenLegal }) => {
+const MainContent: React.FC<HomeProps> = ({ onVideoClick, userMode, currentView, onOpenLegal, searchQuery }) => {
   console.log('[MainContent] Rendering, currentView:', currentView);
   const { t } = useLanguage();
-  const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
   const [videos, setVideos] = useState<Video[]>([]);
   const [creators, setCreators] = useState<Creator[]>([]);
@@ -256,6 +256,7 @@ export default function App() {
   const [isBossMode, setIsBossMode] = useState(false);
   const [isLegalOpen, setIsLegalOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   
   // Navigation State
   const [currentView, setCurrentView] = useState<'home'|'models'|'categories'|'favorites'|'history'>('home');

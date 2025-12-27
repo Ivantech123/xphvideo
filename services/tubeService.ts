@@ -64,10 +64,10 @@ interface PornhubPornstarResponse {
 export const TubeAdapter = {
   
   // EPORNER API (Documentation: https://www.eporner.com/api/v2/)
-  async fetchEporner(query: string = '4k', limit: number = 20): Promise<Video[]> {
+  async fetchEporner(query: string = '4k', limit: number = 20, page: number = 1): Promise<Video[]> {
     try {
       const PROXY = 'https://corsproxy.io/?'; 
-      const API_URL = `https://www.eporner.com/api/v2_video/search/?query=${query}&per_page=${limit}&thumbsize=big&order=top-weekly&json=json`;
+      const API_URL = `https://www.eporner.com/api/v2_video/search/?query=${query}&per_page=${limit}&page=${page}&thumbsize=big&order=top-weekly&json=json`;
       
       const response = await fetch(PROXY + encodeURIComponent(API_URL));
       
@@ -105,12 +105,12 @@ export const TubeAdapter = {
 
   // PORNHUB API
   // NOTE: This usually requires a CORS proxy for frontend-only calls.
-  async fetchPornhub(query: string = 'teens'): Promise<Video[]> {
+  async fetchPornhub(query: string = 'teens', page: number = 1): Promise<Video[]> {
     try {
        // Using a common public CORS proxy for demo purposes. 
        // In production, you should route this through your own backend.
        const PROXY = 'https://corsproxy.io/?'; 
-       const API_URL = `https://www.pornhub.com/webmasters/search?search=${query}&thumbsize=large`;
+       const API_URL = `https://www.pornhub.com/webmasters/search?search=${query}&page=${page}&thumbsize=large`;
        
        const response = await fetch(PROXY + encodeURIComponent(API_URL));
        if (!response.ok) throw new Error('PH Network response was not ok');
@@ -178,11 +178,11 @@ export const TubeAdapter = {
   },
 
   // XVIDEOS API (Scraper via Proxy)
-  async fetchXVideos(query: string = 'best'): Promise<Video[]> {
+  async fetchXVideos(query: string = 'best', page: number = 1): Promise<Video[]> {
     try {
       const PROXY = 'https://corsproxy.io/?';
-      // XVideos search url
-      const TARGET_URL = `https://www.xvideos.com/?k=${encodeURIComponent(query)}&sort=relevance`;
+      // XVideos search url. Page parameter is 'p'
+      const TARGET_URL = `https://www.xvideos.com/?k=${encodeURIComponent(query)}&p=${page}&sort=relevance`;
       
       const response = await fetch(PROXY + encodeURIComponent(TARGET_URL));
       if (!response.ok) throw new Error('XVideos fetch failed');
