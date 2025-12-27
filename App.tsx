@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { HashRouter as Router } from 'react-router-dom';
+import { HashRouter as Router, useSearchParams } from 'react-router-dom';
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
 import { VideoCard } from './components/VideoCard';
@@ -73,13 +73,13 @@ interface HomeProps {
 const MainContent: React.FC<HomeProps> = ({ onVideoClick, onCreatorClick, userMode, currentView, onOpenLegal, searchQuery, setSearchQuery, setActiveCategory, activeCategory }) => {
   console.log('[MainContent] Rendering, currentView:', currentView);
   const { t } = useLanguage();
-  // const [activeCategory, setActiveCategory] = useState('All'); // Lifted up
   const [videos, setVideos] = useState<Video[]>([]);
   const [creators, setCreators] = useState<Creator[]>([]);
   const [collections, setCollections] = useState<Collection[]>(STATIC_COLLECTIONS);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
+  const [activeSource, setActiveSource] = useState('All');
   
   // Dynamic Category List
   const getCategories = () => {
@@ -100,7 +100,7 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, onCreatorClick, userMo
     setPage(1);
     setVideos([]);
     setHasMore(true);
-  }, [userMode, activeCategory, searchQuery]);
+  }, [userMode, activeCategory, searchQuery, activeSource]);
 
   // Load Data Effect
   useEffect(() => {
@@ -119,7 +119,7 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, onCreatorClick, userMo
       try {
         // 1. Fetch Videos
         const query = searchQuery || activeCategory;
-        const vids = await VideoService.getVideos(userMode, query, page);
+        const vids = await VideoService.getVideos(userMode, query, page, activeSource);
         
         if (vids.length === 0) setHasMore(false);
 
@@ -149,7 +149,7 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, onCreatorClick, userMo
       }
     };
     loadData();
-  }, [userMode, activeCategory, currentView, searchQuery, page]);
+  }, [userMode, activeCategory, currentView, searchQuery, page, activeSource]);
 
   // Render Logic based on View
   if (currentView === 'models') {
@@ -174,15 +174,6 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, onCreatorClick, userMo
             onSelectCategory={(cat) => {
                 setActiveCategory(cat);
                 setSearchQuery('');
-                // Need to switch view to home? Assuming parent handles or MainContent re-renders
-                // We should probably tell parent to switch to 'home' if we are in 'categories' view
-                // But MainContent props don't allow changing view. 
-                // It's better if onSelectCategory also triggers view change in parent if possible, 
-                // or we handle it by just changing activeCategory and hope user navigates back.
-                // Actually, let's assume the user clicks a category and wants to see videos.
-                // We can't change currentView here easily without prop. 
-                // Let's rely on the user navigating or restructure. 
-                // For now, simpler: pass a callback that does both.
             }} 
           />
         </div>
@@ -220,13 +211,30 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, onCreatorClick, userMo
     <div className="flex flex-col min-h-screen">
       <div className="p-4 md:p-6 space-y-8 pb-20 flex-1">
         
-        {/* Category Tabs */}
-        <div className={`flex gap-2 overflow-x-auto pb-2 scrollbar-hide sticky top-16 z-20 py-2 -mx-4 px-4 md:mx-0 md:px-0 border-b border-white/5 bg-brand-bg/95 backdrop-blur-sm`}>
-          {currentCategories.map(cat => (
-            <button key={cat} onClick={() => setActiveCategory(cat)} className={`px-4 py-1.5 rounded-none text-xs font-bold whitespace-nowrap transition border-b-2 ${activeCategory === cat ? 'border-brand-gold text-brand-gold' : 'border-transparent text-gray-400 hover:text-white'}`}>
-              {cat}
-            </button>
-          ))}
+        <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center sticky top-16 z-20 bg-brand-bg/95 backdrop-blur-sm py-2 -mx-4 px-4 md:mx-0 md:px-0 border-b border-white/5">
+          {/* Category Tabs */}
+          <div className={`flex gap-2 overflow-x-auto pb-2 md:pb-0 scrollbar-hide flex-1 max-w-full`}>
+            {currentCategories.map(cat => (
+              <button key={cat} onClick={() => setActiveCategory(cat)} className={`px-4 py-1.5 rounded-none text-xs font-bold whitespace-nowrap transition border-b-2 ${activeCategory === cat ? 'border-brand-gold text-brand-gold' : 'border-transparent text-gray-400 hover:text-white'}`}>
+                {cat}
+              </button>
+            ))}
+          </div>
+
+          {/* Source Filter */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+             <span className="text-xs text-gray-500 font-bold uppercase hidden md:inline">{t('source') || 'Source'}:</span>
+             <select 
+               value={activeSource} 
+               onChange={(e) => setActiveSource(e.target.value)}
+               className="bg-black/40 text-white text-xs font-bold px-3 py-1.5 rounded border border-white/10 focus:border-brand-gold outline-none cursor-pointer"
+             >
+               <option value="All">All Sources</option>
+               <option value="Pornhub">Pornhub</option>
+               <option value="Eporner">Eporner</option>
+               <option value="XVideos">XVideos</option>
+             </select>
+          </div>
         </div>
 
         <div className="relative z-10 space-y-8">
@@ -285,10 +293,11 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, onCreatorClick, userMo
   );
 };
 
-// --- APP ROOT ---
+// --- APP WRAPPER ---
 
-export default function App() {
-  console.log('[App] Component mounting...');
+const VelvetApp = () => {
+  console.log('[VelvetApp] Component mounting...');
+  const [searchParams, setSearchParams] = useSearchParams();
   const [isVerified, setIsVerified] = useState<boolean | null>(null);
   const [isSidebarOpen, setSidebarOpen] = useState(true);
   const [currentVideo, setCurrentVideo] = useState<Video | null>(null);
@@ -303,12 +312,43 @@ export default function App() {
   // Navigation State
   const [currentView, setCurrentView] = useState<'home'|'models'|'categories'|'favorites'|'history'>('home');
 
+  // Sync URL params with state
   useEffect(() => {
-    console.log('[App] Checking age verification...');
+    const videoId = searchParams.get('v');
+    const creatorId = searchParams.get('c');
+    const query = searchParams.get('q');
+
+    if (videoId && !currentVideo) {
+      // Fetch video by ID if URL param exists
+      VideoService.getVideoById(videoId).then(v => {
+        if (v) setCurrentVideo(v);
+      });
+    }
+
+    if (creatorId && !currentCreator) {
+      // Ideally fetch creator by ID, for now we might need a method or pass partial
+      // Since we don't have getCreatorById easily without fetching list, we skip or impl later.
+      // Or we can assume we only link to creators loaded in list. 
+      // For MVP, maybe skip auto-loading creator from URL if complex.
+    }
+
+    if (query) {
+      setSearchQuery(query);
+    }
+  }, []);
+
+  // Update URL when state changes
+  useEffect(() => {
+    const params: any = {};
+    if (currentVideo) params.v = currentVideo.id;
+    if (currentCreator) params.c = currentCreator.id;
+    if (searchQuery) params.q = searchQuery;
+    setSearchParams(params);
+  }, [currentVideo, currentCreator, searchQuery]);
+
+  useEffect(() => {
     const verified = localStorage.getItem('velvet_age_verified');
-    console.log('[App] velvet_age_verified from localStorage:', verified);
     setIsVerified(verified === 'true');
-    console.log('[App] isVerified set to:', verified === 'true');
   }, []);
 
   const handleVerification = () => {
@@ -345,10 +385,7 @@ export default function App() {
     setCurrentVideo(null); // Close video if open
   };
 
-  console.log('[App] Current isVerified state:', isVerified);
-
   if (isVerified === null) {
-    console.log('[App] isVerified is null, showing loading spinner');
     return (
       <div className="fixed inset-0 bg-black flex items-center justify-center">
         <div className="w-16 h-16 rounded-full bg-amber-500/10 flex items-center justify-center border border-amber-500/30 animate-pulse">
@@ -358,13 +395,7 @@ export default function App() {
     );
   }
 
-  console.log('[App] Rendering main app, isVerified:', isVerified);
-
   return (
-    <LanguageProvider>
-      <AuthProvider>
-      <GeoBlock>
-      <Router>
         <div className={`min-h-screen text-gray-200 font-sans selection:bg-brand-gold selection:text-black transition-colors duration-500 bg-brand-bg bg-grain`}>
           <BossMode isActive={isBossMode} onExit={() => setIsBossMode(false)} />
           {!isVerified && <AgeGate onVerify={handleVerification} />}
@@ -416,7 +447,6 @@ export default function App() {
                     activeCategory={activeCategory}
                     setActiveCategory={(cat) => {
                         setActiveCategory(cat);
-                        // If selecting category from 'categories' view, switch to 'home'
                         if (currentView === 'categories') {
                             setCurrentView('home');
                             setSearchQuery('');
@@ -427,6 +457,16 @@ export default function App() {
              </main>
           </div>
         </div>
+  );
+};
+
+export default function App() {
+  return (
+    <LanguageProvider>
+      <AuthProvider>
+      <GeoBlock>
+      <Router>
+        <VelvetApp />
       </Router>
       </GeoBlock>
       </AuthProvider>

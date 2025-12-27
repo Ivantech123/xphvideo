@@ -33,9 +33,13 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose, onVide
     
     // Fetch related videos based on tags or title
     const loadRelated = async () => {
-       const query = video.tags?.[0]?.label || 'popular';
+       // Use up to 3 tags for better relevance, or title keywords
+       const tags = video.tags?.slice(0, 3).map(t => t.label).join(' ') || video.title.split(' ').slice(0, 3).join(' ');
+       const query = tags || 'popular';
        const vids = await VideoService.getVideos('General', query);
-       setRelatedVideos(vids.slice(0, 12));
+       // Filter out current video
+       const filtered = vids.filter(v => v.id !== video.id).slice(0, 12);
+       setRelatedVideos(filtered);
     };
     loadRelated();
   }, [video, user]);
