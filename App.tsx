@@ -80,6 +80,7 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, onCreatorClick, userMo
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [activeSource, setActiveSource] = useState('All');
+  const [showAllCategories, setShowAllCategories] = useState(false);
   
   // Dynamic Category List
   const getCategories = () => {
@@ -211,25 +212,31 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, onCreatorClick, userMo
     <div className="flex flex-col min-h-screen">
       <div className="p-4 md:p-6 space-y-8 pb-20 flex-1">
         
-        <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center sticky top-16 z-20 bg-brand-bg/95 backdrop-blur-sm py-2 -mx-4 px-4 md:mx-0 md:px-0 border-b border-white/5">
-          {/* Category Tabs */}
-          <div className={`flex gap-2 overflow-x-auto pb-2 md:pb-0 scrollbar-hide flex-1 max-w-full items-center`}>
-            <button 
-               onClick={() => { setCurrentView('categories'); setSearchQuery(''); }}
-               className="px-3 py-1.5 rounded bg-white/10 hover:bg-white/20 text-white transition flex-shrink-0 border border-white/5"
-               title={t('categories')}
-            >
-               <Icon name="Grid" size={16} />
-            </button>
-            <div className="w-px h-6 bg-white/10 mx-1 flex-shrink-0"></div>
-            {currentCategories.map(cat => (
-              <button key={cat} onClick={() => setActiveCategory(cat)} className={`px-4 py-1.5 rounded-none text-xs font-bold whitespace-nowrap transition border-b-2 ${activeCategory === cat ? 'border-brand-gold text-brand-gold' : 'border-transparent text-gray-400 hover:text-white'}`}>
-                {cat}
-              </button>
-            ))}
+        <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center sticky top-16 z-20 bg-brand-bg/95 backdrop-blur-sm py-2 -mx-4 px-4 md:mx-0 md:px-0 border-b border-white/5 transition-all">
+          
+          {/* Category Tabs / Grid Toggle */}
+          <div className="flex-1 w-full relative">
+             <div className={`flex gap-2 items-center w-full ${showAllCategories ? 'flex-wrap' : 'overflow-x-auto pb-2 md:pb-0 scrollbar-hide'}`}>
+                <button 
+                   onClick={() => setShowAllCategories(!showAllCategories)}
+                   className={`px-3 py-1.5 rounded bg-white/10 hover:bg-white/20 text-white transition flex-shrink-0 border border-white/5 ${showAllCategories ? 'bg-brand-gold text-black border-brand-gold' : ''}`}
+                   title={showAllCategories ? t('collapse') : t('show_all')}
+                >
+                   <Icon name={showAllCategories ? "ChevronUp" : "Grid"} size={16} />
+                </button>
+                <div className="w-px h-6 bg-white/10 mx-1 flex-shrink-0"></div>
+                {currentCategories.map(cat => (
+                  <button key={cat} onClick={() => { setActiveCategory(cat); setShowAllCategories(false); }} className={`px-4 py-1.5 rounded-none text-xs font-bold whitespace-nowrap transition border-b-2 flex-shrink-0 ${activeCategory === cat ? 'border-brand-gold text-brand-gold' : 'border-transparent text-gray-400 hover:text-white'}`}>
+                    {cat}
+                  </button>
+                ))}
+             </div>
+             {/* Overlay backdrop when expanded */}
+             {showAllCategories && <div className="fixed inset-0 top-32 z-[-1] bg-black/50 backdrop-blur-sm" onClick={() => setShowAllCategories(false)}></div>}
           </div>
 
           {/* Source Filter */}
+          <div className="flex items-center gap-2 flex-shrink-0 self-end md:self-auto">
           <div className="flex items-center gap-2 flex-shrink-0">
              <span className="text-xs text-gray-500 font-bold uppercase hidden md:inline">{t('source') || 'Source'}:</span>
              <select 

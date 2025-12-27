@@ -1,4 +1,4 @@
-import { Video, UserMode } from '../types';
+import { Video, UserMode, Creator } from '../types';
 import { MOCK_VIDEOS, CREATORS } from '../constants';
 import { TubeAdapter } from './tubeService';
 import { CATEGORY_MAP } from './categoryMap';

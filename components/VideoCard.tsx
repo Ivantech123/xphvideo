@@ -114,7 +114,9 @@ export const VideoCard: React.FC<VideoCardProps> = ({ video, compact = false, on
           <div className="flex items-center gap-2 text-[11px] text-gray-500 mt-0.5 font-medium">
             <span>{formatViews(video.views)} {t('views')}</span>
             <span>•</span>
-            <span>{video.rating ? `${video.rating}%` : '98%'} <Icon name="ThumbsUp" size={10} className="inline mb-0.5" /></span>
+            {video.rating ? (
+              <span>{video.rating}% <Icon name="ThumbsUp" size={10} className="inline mb-0.5" /></span>
+            ) : null}
           </div>
         </div>
       </div>

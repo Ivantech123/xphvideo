@@ -24,6 +24,30 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose, onVide
   const [isFavorite, setIsFavorite] = useState(false);
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [relatedVideos, setRelatedVideos] = useState<Video[]>([]);
+  const [currentTime, setCurrentTime] = useState(0);
+  const videoRef = React.useRef<HTMLVideoElement>(null);
+
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
+
+  useEffect(() => {
+    if (videoRef.current) {
+        if (isPlaying) {
+            videoRef.current.play().catch(() => {});
+        } else {
+            videoRef.current.pause();
+        }
+    }
+  }, [isPlaying]);
+
+  useEffect(() => {
+    if (videoRef.current) {
+        videoRef.current.muted = isMuted;
+    }
+  }, [isMuted]);
 
   useEffect(() => {
     setIsFavorite(VideoService.isFavorite(video.id));
@@ -122,12 +146,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose, onVide
                     src={video.videoUrl} 
                     poster={video.thumbnail}
                     className={`w-full h-full object-cover transition-all duration-500 ${isBlurred ? 'blur-3xl opacity-50' : 'opacity-100'}`}
-                    ref={(el) => {
-                        if (el) {
-                            isPlaying ? el.play().catch(() => {}) : el.pause();
-                            el.muted = isMuted;
-                        }
-                    }}
+                    ref={videoRef}
+                    onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
                     loop
                 />
                  
@@ -146,7 +166,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose, onVide
                     <div className="flex items-center gap-3">
                        <button onClick={() => setIsPlaying(!isPlaying)} className="text-white hover:text-brand-gold"><Icon name={isPlaying ? "Pause" : "Play"} size={20} fill="currentColor" /></button>
                        <button onClick={() => setIsMuted(!isMuted)} className="text-white hover:text-brand-gold"><Icon name={isMuted ? "VolumeX" : "Volume2"} size={20} /></button>
-                       <div className="text-white text-xs font-mono">{Math.floor(video.duration / 60)}:00 / {Math.floor(video.duration / 60)}:45</div>
+                       <div className="text-white text-xs font-mono">{formatTime(currentTime)} / {formatTime(video.duration)}</div>
                     </div>
                     <div className="flex gap-4 items-center">
                        <button className="text-white hover:text-brand-gold transition"><Icon name="Maximize" size={20} /></button>
@@ -204,7 +224,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose, onVide
            <div className="flex flex-col gap-3">
               {relatedVideos.length > 0 ? relatedVideos.map((v, i) => (
                  <React.Fragment key={v.id}>
-                    <VideoCard video={v} compact onClick={() => onVideoChange(v)} />
+                    <VideoCard video={v} compact onClick={() => onVideoChange(v)} onCreatorClick={onCreatorClick} />
                     {i === 2 && <AdUnit size="banner" className="h-24 w-full" label={t('ad')} />}
                  </React.Fragment>
               )) : (

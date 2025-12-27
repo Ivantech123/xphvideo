@@ -11,9 +11,10 @@ interface SidebarProps {
   currentView: ViewType;
   onChangeView: (view: ViewType) => void;
   onOpenLegal?: () => void;
+  onCreatorClick?: (creator: any) => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentView, onChangeView, onOpenLegal }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentView, onChangeView, onOpenLegal, onCreatorClick }) => {
   const { t } = useLanguage();
   const { user, isAdmin } = useAuth();
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
@@ -106,7 +107,21 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentView, onChangeV
              <h3 className="text-xs font-bold text-gray-500 uppercase mb-3 tracking-wider">{t('subscriptions')}</h3>
              <div className="space-y-3">
                 {subscriptions.length > 0 ? subscriptions.map(sub => (
-                  <div key={sub.id} className="flex items-center gap-3 cursor-pointer hover:text-white text-gray-400 group">
+                  <div 
+                    key={sub.id} 
+                    className="flex items-center gap-3 cursor-pointer hover:text-white text-gray-400 group"
+                    onClick={() => {
+                        if (onCreatorClick) {
+                            onCreatorClick({
+                                id: sub.creator_id,
+                                name: sub.creator_name,
+                                avatar: sub.creator_avatar || '',
+                                verified: true,
+                                tier: 'Standard'
+                            });
+                        }
+                    }}
+                  >
                     {sub.creator_avatar ? (
                       <img src={sub.creator_avatar} className="w-6 h-6 rounded-full object-cover border border-transparent group-hover:border-brand-gold transition-colors" />
                     ) : (

@@ -66,21 +66,19 @@ export const TubeAdapter = {
   // EPORNER API (Documentation: https://www.eporner.com/api/v2/)
   async fetchEporner(query: string = '4k', limit: number = 20, page: number = 1): Promise<Video[]> {
     try {
-      // Using allorigins to bypass CORS and avoid 301 redirects issues with other proxies
-      const API_URL = `https://www.eporner.com/api/v2_video/search/?query=${query}&per_page=${limit}&page=${page}&thumbsize=big&order=top-weekly&json=json`;
-      const PROXY_URL = `https://api.allorigins.win/get?url=${encodeURIComponent(API_URL)}`;
+      // Eporner supports CORS natively, try direct fetch first
+      const API_URL = `https://www.eporner.com/api/v2_video/search/?query=${encodeURIComponent(query)}&per_page=${limit}&page=${page}&thumbsize=big&order=top-weekly&json=json`;
       
-      const response = await fetch(PROXY_URL);
+      const response = await fetch(API_URL);
       
       if (!response.ok) throw new Error('Network response was not ok');
       
-      const wrapper = await response.json();
-      const data: EpornerResponse = JSON.parse(wrapper.contents);
+      const data: EpornerResponse = await response.json();
       
       return data.videos.map(ev => ({
         id: `ep_${ev.id}`,
         title: ev.title,
-        description: ev.keywords, // Use keywords as description/metadata since we don't have a real summary
+        description: ev.keywords, 
         thumbnail: ev.default_thumb.src,
         videoUrl: '', 
         embedUrl: ev.embed.match(/src="([^"]+)"/)?.[1] || '', 
@@ -94,8 +92,8 @@ export const TubeAdapter = {
         },
         tags: ev.keywords.split(',').map((tag, idx) => ({ id: `tag_${idx}`, label: tag.trim() })),
         views: ev.views,
-        rating: parseFloat(ev.rate),
-        quality: 'HD', // Default assumption
+        rating: parseFloat(ev.rate) || 0, // Eporner rate is usually percentage string "95.5"
+        quality: 'HD', 
         source: 'Eporner'
       }));
 
@@ -106,13 +104,10 @@ export const TubeAdapter = {
   },
 
   // PORNHUB API
-  // NOTE: This usually requires a CORS proxy for frontend-only calls.
-  async fetchPornhub(query: string = 'teens', page: number = 1): Promise<Video[]> {
+  async fetchPornhub(query: string = 'popular', page: number = 1): Promise<Video[]> {
     try {
-       // Using a common public CORS proxy for demo purposes. 
-       // In production, you should route this through your own backend.
        const PROXY = 'https://corsproxy.io/?'; 
-       const API_URL = `https://www.pornhub.com/webmasters/search?search=${query}&page=${page}&thumbsize=large`;
+       const API_URL = `https://www.pornhub.com/webmasters/search?search=${encodeURIComponent(query)}&page=${page}&thumbsize=large`;
        
        const response = await fetch(PROXY + encodeURIComponent(API_URL));
        if (!response.ok) throw new Error('PH Network response was not ok');
@@ -124,6 +119,9 @@ export const TubeAdapter = {
          // Ensure tags are strings before joining
          const tagsList = Array.isArray(ph.tags) ? ph.tags.map((t: any) => typeof t === 'string' ? t : (t.tag_name || 'Tag')) : [];
          
+         // Normalize rating: prefer rating_percent (0-100), fallback to rating (0-5) * 20
+         const ratingVal = ph.rating_percent ? Number(ph.rating_percent) : (ph.rating ? Number(ph.rating) * 20 : 0);
+
          return {
           id: `ph_${ph.video_id}`,
           title: ph.title,
@@ -135,13 +133,13 @@ export const TubeAdapter = {
           creator: {
             id: `ph_c_${creatorName.replace(/\s+/g, '_')}`,
             name: creatorName,
-            avatar: ph.thumbs?.[0]?.src || 'https://www.pornhub.com/favicon.ico', // Use a video thumb as avatar proxy or default
+            avatar: ph.thumbs?.[0]?.src || 'https://www.pornhub.com/favicon.ico', 
             verified: true,
             tier: 'Standard'
           },
-          tags: tagsArray.map((t, i) => ({ id: `pht_${i}`, label: t })),
+          tags: tagsList.map((t, i) => ({ id: `pht_${i}`, label: t })),
           views: Number(ph.views),
-          rating: Number(ph.rating),
+          rating: Math.round(ratingVal),
           quality: 'HD',
           source: 'Pornhub'
        };
@@ -198,7 +196,9 @@ export const TubeAdapter = {
       const nodes = Array.from(doc.querySelectorAll('.thumb-block'));
       
       return nodes.slice(0, 12).map((node: Element) => {
-         const id = node.getAttribute('data-id') || Math.random().toString(36).substr(2, 9);
+         const id = node.getAttribute('data-id');
+         if (!id) return null; // Skip invalid nodes
+
          const titleEl = node.querySelector('.title a');
          const title = titleEl?.textContent || 'Untitled';
          const thumbEl = node.querySelector('img');
@@ -237,7 +237,7 @@ export const TubeAdapter = {
            quality: 'HD',
            source: 'XVideos' as any // Cast because 'XVideos' might not be in literal type yet
          };
-      });
+      }).filter(v => v !== null) as Video[];
 
     } catch (e) {
       console.error("XVideos fetch error", e);
@@ -251,13 +251,11 @@ export const TubeAdapter = {
       const realId = id.replace('ep_', '');
       try {
         const API_URL = `https://www.eporner.com/api/v2_video/id/?id=${realId}&thumbsize=big&json=json`;
-        const PROXY_URL = `https://api.allorigins.win/get?url=${encodeURIComponent(API_URL)}`;
         
-        const response = await fetch(PROXY_URL);
+        const response = await fetch(API_URL);
         if (!response.ok) throw new Error('Eporner ID fetch failed');
         
-        const wrapper = await response.json();
-        const data: EpornerVideo = JSON.parse(wrapper.contents);
+        const data: EpornerVideo = await response.json();
         
         // Map single object
         return {
