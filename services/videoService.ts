@@ -2,6 +2,7 @@ import { Video, UserMode, Creator } from '../types';
 import { MOCK_VIDEOS, CREATORS } from '../constants';
 import { TubeAdapter } from './tubeService';
 import { CATEGORY_MAP } from './categoryMap';
+import { RecommendationService } from './recommendationService';
 
 // Fisher-Yates shuffle for randomizing videos
 function shuffleArray<T>(array: T[]): T[] {
@@ -41,7 +42,10 @@ export const VideoService = {
         let mappedCategory = CATEGORY_MAP[rawCategory] || rawCategory;
         
         let query = mappedCategory || baseQuery;
-        if (!query) query = 'popular';
+        if (!query) {
+          // Use personalized query based on user behavior
+          query = RecommendationService.getPersonalizedQuery();
+        }
         
         const fetchPromises = [];
 
@@ -74,8 +78,8 @@ export const VideoService = {
                 if (xv[i]) videos.push(xv[i]);
              }
              
-             // Shuffle videos for variety on main page
-             videos = shuffleArray(videos);
+             // Sort by recommendation score for personalized feed
+             videos = RecommendationService.sortByRecommendation(videos);
         } else {
             videos = allFetched;
         }

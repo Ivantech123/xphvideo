@@ -5,6 +5,7 @@ import { AdUnit } from './AdUnit';
 import { VideoCard } from './VideoCard';
 import { VideoService } from '../services/videoService';
 import { SubscriptionService } from '../services/subscriptionService';
+import { RecommendationService } from '../services/recommendationService';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -50,8 +51,11 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose, onVide
   }, [isMuted]);
 
   useEffect(() => {
+    // Track video view for recommendations
+    RecommendationService.trackView(video);
+    
     setIsFavorite(VideoService.isFavorite(video.id));
-    if (user) {
+    if (user && video.creator?.id) {
         SubscriptionService.isSubscribed(video.creator.id).then(setIsSubscribed);
     }
     
@@ -92,6 +96,16 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose, onVide
         onCreatorClick(video.creator);
     }
   };
+
+  // Track watch time periodically
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (currentTime > 0) {
+        RecommendationService.trackWatchTime(video.id, currentTime);
+      }
+    }, 10000); // Save every 10 seconds
+    return () => clearInterval(interval);
+  }, [video.id, currentTime]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
