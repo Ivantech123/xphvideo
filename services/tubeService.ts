@@ -66,15 +66,16 @@ export const TubeAdapter = {
   // EPORNER API (Documentation: https://www.eporner.com/api/v2/)
   async fetchEporner(query: string = '4k', limit: number = 20, page: number = 1): Promise<Video[]> {
     try {
-      // Eporner does NOT support CORS from browser, use proxy
-      const PROXY = 'https://corsproxy.io/?';
+      // Use allorigins proxy which wraps response in JSON
       const API_URL = `https://www.eporner.com/api/v2_video/search/?query=${encodeURIComponent(query)}&per_page=${limit}&page=${page}&thumbsize=big&order=top-weekly&json=json`;
+      const PROXY_URL = `https://api.allorigins.win/get?url=${encodeURIComponent(API_URL)}`;
       
-      const response = await fetch(PROXY + encodeURIComponent(API_URL));
+      const response = await fetch(PROXY_URL);
       
       if (!response.ok) throw new Error('Network response was not ok');
       
-      const data: EpornerResponse = await response.json();
+      const wrapper = await response.json();
+      const data: EpornerResponse = JSON.parse(wrapper.contents);
       
       return data.videos.map(ev => ({
         id: `ep_${ev.id}`,
@@ -245,13 +246,14 @@ export const TubeAdapter = {
     if (id.startsWith('ep_')) {
       const realId = id.replace('ep_', '');
       try {
-        const PROXY = 'https://corsproxy.io/?';
         const API_URL = `https://www.eporner.com/api/v2_video/id/?id=${realId}&thumbsize=big&json=json`;
+        const PROXY_URL = `https://api.allorigins.win/get?url=${encodeURIComponent(API_URL)}`;
         
-        const response = await fetch(PROXY + encodeURIComponent(API_URL));
+        const response = await fetch(PROXY_URL);
         if (!response.ok) throw new Error('Eporner ID fetch failed');
         
-        const data: EpornerVideo = await response.json();
+        const wrapper = await response.json();
+        const data: EpornerVideo = JSON.parse(wrapper.contents);
         
         // Map single object
         return {
