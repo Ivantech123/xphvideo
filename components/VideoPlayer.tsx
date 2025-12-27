@@ -25,7 +25,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose, onVide
     
     // Fetch related videos based on tags or title
     const loadRelated = async () => {
-       const query = video.tags[0]?.label || 'popular';
+       const query = video.tags?.[0]?.label || 'popular';
        const vids = await VideoService.getVideos('General', query);
        setRelatedVideos(vids.slice(0, 6));
     };
@@ -59,7 +59,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose, onVide
           <Icon name="ArrowLeft" size={24} />
         </button>
         <div className="flex-1 truncate">
-           <span className="font-semibold text-sm md:text-base text-gray-300">{t('category_label')} <span className="text-white hover:underline cursor-pointer">{video.tags[0].label}</span></span>
+           <span className="font-semibold text-sm md:text-base text-gray-300">{t('category_label')} <span className="text-white hover:underline cursor-pointer">{video.tags?.[0]?.label || 'General'}</span></span>
         </div>
         <button 
            onClick={() => setIsBlurred(!isBlurred)}

@@ -131,7 +131,10 @@ export const TubeAdapter = {
             verified: true,
             tier: 'Standard'
           },
-          tags: ph.tags.map((t, i) => ({ id: `pht_${i}`, label: t })),
+          tags: Array.isArray(ph.tags) ? ph.tags.map((t: any, i) => ({ 
+            id: `pht_${i}`, 
+            label: typeof t === 'string' ? t : (t.tag_name || 'Tag') 
+          })) : [],
           views: Number(ph.views),
           rating: Number(ph.rating),
           quality: 'HD',
@@ -300,7 +303,10 @@ export const TubeAdapter = {
               verified: true,
               tier: 'Standard'
             },
-            tags: ph.tags.map((t, i) => ({ id: `pht_${i}`, label: t })),
+            tags: Array.isArray(ph.tags) ? ph.tags.map((t: any, i) => ({ 
+              id: `pht_${i}`, 
+              label: typeof t === 'string' ? t : (t.tag_name || 'Tag') 
+            })) : [],
             views: Number(ph.views),
             quality: 'HD',
             source: 'Pornhub'
