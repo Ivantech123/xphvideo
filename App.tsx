@@ -18,6 +18,8 @@ import { BodyRatings } from './components/BodyRatings';
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
 import { VideoService } from './services/videoService';
 import { GeoBlock } from './components/GeoBlock';
+import { AuthProvider } from './contexts/AuthContext';
+import { AuthModal } from './components/AuthModal';
 
 // --- NEW PAGES (Internal Components for cleaner file) ---
 
@@ -263,6 +265,7 @@ export default function App() {
   const [isVelvetTouchOpen, setIsVelvetTouchOpen] = useState(false);
   const [isChartsOpen, setIsChartsOpen] = useState(false);
   const [isLegalOpen, setIsLegalOpen] = useState(false);
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
   
   // Navigation State
   const [currentView, setCurrentView] = useState<'home'|'models'|'categories'|'favorites'|'history'>('home');
@@ -320,6 +323,7 @@ export default function App() {
 
   return (
     <LanguageProvider>
+      <AuthProvider>
       <GeoBlock>
       <Router>
         <div className={`min-h-screen text-gray-200 font-sans selection:bg-brand-gold selection:text-black transition-colors duration-500 bg-brand-bg bg-grain`}>
@@ -329,6 +333,7 @@ export default function App() {
           <GuidedSessionOverlay isActive={isVelvetTouchOpen} userMode={userMode} onClose={() => setIsVelvetTouchOpen(false)} standalone={true} />
           {isChartsOpen && <BodyRatings userMode={userMode} onClose={() => setIsChartsOpen(false)} />}
           {isLegalOpen && <LegalModal onClose={() => setIsLegalOpen(false)} />}
+          {isAuthOpen && <AuthModal onClose={() => setIsAuthOpen(false)} />}
 
           <div className={`transition-opacity duration-500 ${!isVerified ? 'opacity-0 h-0 overflow-hidden' : 'opacity-100'}`}>
              <Navbar 
@@ -338,6 +343,7 @@ export default function App() {
                 userMode={userMode}
                 onModeChange={setUserMode}
                 onBossMode={() => setIsBossMode(true)}
+                onAuthClick={() => setIsAuthOpen(true)}
              />
              
              <Sidebar 
@@ -368,6 +374,7 @@ export default function App() {
         </div>
       </Router>
       </GeoBlock>
+      </AuthProvider>
     </LanguageProvider>
   );
 }

@@ -1,16 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Instructions for the user:
-// 1. Create a project at https://supabase.com
-// 2. Get your URL and ANON KEY from the project settings
-// 3. Create a .env file in the root of your project with:
-//    VITE_SUPABASE_URL=your_project_url
-//    VITE_SUPABASE_ANON_KEY=your_anon_key
+// Supabase configuration
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://odvgciifzxaiojhqenld.supabase.co';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9kdmdjaWlmenhhaW9qaHFlbmxkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTgyODc4MTYsImV4cCI6MjA3Mzg2MzgxNn0.9iR_1RWAOg0uJw058n_DgIOuYFCr_y8zxFVzMLbnwJg';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
-
-// Fallback to null if not configured to prevent crash, but Auth will fail
-export const supabase = (supabaseUrl && supabaseAnonKey) 
-  ? createClient(supabaseUrl, supabaseAnonKey) 
-  : null;
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);

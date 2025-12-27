@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, AuthService } from '../services/authService';
 import { supabase } from '../services/supabase';
 
+console.log('[AuthContext] Module loaded, supabase:', supabase ? 'initialized' : 'null');
+
 interface AuthContextType {
   user: User | null;
   isAdmin: boolean;
