@@ -70,9 +70,6 @@ export const VideoCard: React.FC<VideoCardProps> = ({ video, compact = false, on
            {video.quality === '4K' && (
              <span className="bg-brand-gold text-black px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">4K</span>
            )}
-           {video.price && (
-             <span className="bg-brand-accent text-white px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">{t('premium_tag')}</span>
-           )}
         </div>
 
         {/* Duration Badge */}

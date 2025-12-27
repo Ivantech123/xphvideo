@@ -119,10 +119,12 @@ export const TubeAdapter = {
 
        return data.videos.map(ph => {
          const creatorName = ph.pornstars?.[0]?.pornstar_name || 'Pornhub Network';
+         const tagsArray = Array.isArray(ph.tags) ? ph.tags.map((t: any) => typeof t === 'string' ? t : (t.tag_name || 'Tag')) : [];
+         
          return {
           id: `ph_${ph.video_id}`,
           title: ph.title,
-          description: ph.tags.join(', '),
+          description: tagsArray.join(', ') || 'No description available',
           thumbnail: ph.default_thumb,
           videoUrl: '', 
           embedUrl: `https://www.pornhub.com/embed/${ph.video_id}`,
@@ -134,10 +136,7 @@ export const TubeAdapter = {
             verified: true,
             tier: 'Standard'
           },
-          tags: Array.isArray(ph.tags) ? ph.tags.map((t: any, i) => ({ 
-            id: `pht_${i}`, 
-            label: typeof t === 'string' ? t : (t.tag_name || 'Tag') 
-          })) : [],
+          tags: tagsArray.map((t, i) => ({ id: `pht_${i}`, label: t })),
           views: Number(ph.views),
           rating: Number(ph.rating),
           quality: 'HD',
@@ -166,7 +165,11 @@ export const TubeAdapter = {
          name: p.pornstar_name,
          avatar: p.thumbnails?.[0]?.src || '',
          verified: true,
-         tier: p.rank < 100 ? 'Exclusive' : 'Premium'
+         tier: p.rank < 100 ? 'Exclusive' : 'Premium',
+         stats: {
+            videos: p.videos_count_all,
+            views: p.views
+         }
        }));
     } catch (error) {
        console.error("Failed to fetch pornstars", error);

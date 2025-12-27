@@ -31,7 +31,9 @@ const ModelsGrid = ({ creators }: { creators: Creator[] }) => (
           <h3 className="font-bold text-white flex items-center justify-center gap-1">
              {c.name} {c.verified && <Icon name="BadgeCheck" size={14} className="text-blue-500" />}
           </h3>
-          <p className="text-xs text-gray-500 mt-1">24 Videos • 1.2M Views</p>
+          <p className="text-xs text-gray-500 mt-1">
+            {c.stats ? `${c.stats.videos} Videos • ${(c.stats.views / 1000000).toFixed(1)}M Views` : '24 Videos • 1.2M Views'}
+          </p>
           <button className="mt-3 w-full py-1.5 rounded bg-white/5 hover:bg-brand-gold hover:text-black text-xs font-bold transition">View Profile</button>
         </div>
       </div>
@@ -65,6 +67,7 @@ interface HomeProps {
 const MainContent: React.FC<HomeProps> = ({ onVideoClick, userMode, currentView, onOpenLegal }) => {
   console.log('[MainContent] Rendering, currentView:', currentView);
   const { t } = useLanguage();
+  const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
   const [videos, setVideos] = useState<Video[]>([]);
   const [creators, setCreators] = useState<Creator[]>([]);
@@ -87,14 +90,23 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, userMode, currentView,
 
   // Load Data Effect
   useEffect(() => {
-    setActiveCategory(currentCategories[0]);
+    // If search is active, use it. Otherwise use active category.
+    // Reset category to first item when mode changes, unless searching.
+    if (!searchQuery) {
+        // Only reset category if we are not searching
+        if (!currentCategories.includes(activeCategory)) {
+            setActiveCategory(currentCategories[0]);
+        }
+    }
+
     const loadData = async () => {
       console.log('[MainContent] Loading data...');
       setLoading(true);
       try {
         // 1. Fetch Videos
-        console.log('[MainContent] Fetching videos for', userMode, activeCategory);
-        const vids = await VideoService.getVideos(userMode, activeCategory);
+        console.log('[MainContent] Fetching videos for', userMode, searchQuery || activeCategory);
+        const query = searchQuery || activeCategory;
+        const vids = await VideoService.getVideos(userMode, query);
         console.log('[MainContent] Got videos:', vids.length);
         
         // 2. Filter by View Type (History/Favs)
@@ -117,7 +129,14 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, userMode, currentView,
       }
     };
     loadData();
-  }, [userMode, activeCategory, currentView]);
+  }, [userMode, activeCategory, currentView, searchQuery]);
+
+  // Expose search handler for parent to call (via props, but here we just need to react to props)
+  // Actually, MainContent needs to receive the search query or handler. 
+  // Let's lift the state up to App, or handle it via props.
+  // Wait, MainContent is a child. App has the Navbar. 
+  // We need to pass onSearch from Navbar -> App -> MainContent (or state in App).
+
 
   // Render Logic based on View
   if (currentView === 'models') {
@@ -307,18 +326,19 @@ export default function App() {
           <div className={`transition-opacity duration-500 ${!isVerified ? 'opacity-0 h-0 overflow-hidden' : 'opacity-100'}`}>
              <Navbar 
                 onMenuClick={toggleSidebar} 
-                onHomeClick={() => { setCurrentVideo(null); setCurrentView('home'); }} 
+                onHomeClick={() => { setCurrentVideo(null); setCurrentView('home'); setSearchQuery(''); }} 
                 onPanic={handlePanic}
                 userMode={userMode}
                 onModeChange={setUserMode}
                 onBossMode={() => setIsBossMode(true)}
                 onAuthClick={() => setIsAuthOpen(true)}
+                onSearch={setSearchQuery}
              />
              
              <Sidebar 
                isOpen={isSidebarOpen} 
                currentView={currentView}
-               onChangeView={(view) => { setCurrentView(view); setCurrentVideo(null); }}
+               onChangeView={(view) => { setCurrentView(view); setCurrentVideo(null); setSearchQuery(''); }}
              />
 
              <main className={`pt-16 transition-all duration-300 ${isSidebarOpen ? 'md:ml-60' : 'md:ml-20'}`}>
@@ -334,6 +354,7 @@ export default function App() {
                     userMode={userMode} 
                     currentView={currentView}
                     onOpenLegal={() => setIsLegalOpen(true)}
+                    searchQuery={searchQuery}
                   />
                 )}
              </main>

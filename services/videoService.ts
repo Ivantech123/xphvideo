@@ -12,7 +12,7 @@ import { CATEGORY_MAP } from './categoryMap';
 
 export const VideoService = {
   
-  async getVideos(mode: UserMode, category?: string): Promise<Video[]> {
+  async getVideos(mode: UserMode, category?: string, page: number = 1): Promise<Video[]> {
     // 1. Fetch External Data (Real API)
     // We map UserMode/Category to search queries
     let videos: Video[] = [];
@@ -40,7 +40,13 @@ export const VideoService = {
           TubeAdapter.fetchXVideos(query)
         ]);
         
-        videos = [...epornerVids, ...phVids, ...xvVids];
+        // Interleave videos to mix sources
+        const maxLength = Math.max(epornerVids.length, phVids.length, xvVids.length);
+        for (let i = 0; i < maxLength; i++) {
+            if (phVids[i]) videos.push(phVids[i]);
+            if (epornerVids[i]) videos.push(epornerVids[i]);
+            if (xvVids[i]) videos.push(xvVids[i]);
+        }
         
     } catch (e) {
         console.warn("External API failed", e);

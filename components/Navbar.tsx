@@ -12,6 +12,7 @@ interface NavbarProps {
   onModeChange: (mode: UserMode) => void;
   onBossMode: () => void;
   onAuthClick: () => void;
+  onSearch: (query: string) => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ 
@@ -21,13 +22,22 @@ export const Navbar: React.FC<NavbarProps> = ({
   userMode,
   onModeChange,
   onBossMode,
-  onAuthClick
+  onAuthClick,
+  onSearch
 }) => {
   const { t, lang, setLang } = useLanguage();
   const { user, logout } = useAuth();
   const [showModeMenu, setShowModeMenu] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [searchValue, setSearchValue] = useState('');
   const menuRef = useRef<HTMLDivElement>(null);
+
+  const handleSearch = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      onSearch(searchValue);
+      setMobileSearchOpen(false);
+    }
+  };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -86,6 +96,9 @@ export const Navbar: React.FC<NavbarProps> = ({
              type="text" 
              placeholder={t('search_placeholder')}
              className="flex-1 bg-transparent text-white focus:outline-none h-full text-lg placeholder-gray-500 font-serif"
+             value={searchValue}
+             onChange={(e) => setSearchValue(e.target.value)}
+             onKeyDown={handleSearch}
            />
            <button onClick={() => setMobileSearchOpen(false)} className="p-2 ml-2 text-gray-400">
              <Icon name="X" size={24} />
@@ -118,6 +131,9 @@ export const Navbar: React.FC<NavbarProps> = ({
             type="text" 
             placeholder={t('search_placeholder')}
             className={`w-full rounded-none border-b border-gray-700 bg-transparent pl-10 pr-4 py-2.5 text-sm text-white focus:outline-none transition-all focus:border-brand-gold placeholder-gray-600 ${theme.searchFocus}`}
+            value={searchValue}
+            onChange={(e) => setSearchValue(e.target.value)}
+            onKeyDown={handleSearch}
           />
         </div>
       </div>

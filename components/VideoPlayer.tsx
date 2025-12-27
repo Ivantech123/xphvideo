@@ -158,9 +158,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose, onVide
                   )}
                </div>
                <div className="flex items-center gap-2">
-                  <button className="flex items-center gap-2 bg-brand-surface border border-brand-gold/30 text-brand-gold px-4 py-2 rounded-full hover:bg-brand-gold hover:text-black transition text-sm font-bold animate-pulse-slow">
-                    <Icon name="DollarSign" size={16} /> <span>{t('tip')}</span>
-                  </button>
                   <button onClick={toggleFav} className={`flex items-center gap-2 bg-brand-surface px-4 py-2 rounded-full transition text-sm font-medium ${isFavorite ? 'text-red-500 bg-white/10' : 'text-white hover:bg-white/10'}`}>
                     <Icon name="Heart" size={18} fill={isFavorite ? "currentColor" : "none"} /> <span className="hidden sm:inline">{t('favorites')}</span>
                   </button>
