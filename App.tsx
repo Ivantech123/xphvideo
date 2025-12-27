@@ -5,16 +5,12 @@ import { Sidebar } from './components/Sidebar';
 import { VideoCard } from './components/VideoCard';
 import { VideoPlayer } from './components/VideoPlayer';
 import { AgeGate } from './components/AgeGate';
-import { AdUnit } from './components/AdUnit';
-import { AICurator } from './components/AICurator';
 import { BossMode } from './components/BossMode';
 import { Footer } from './components/Footer';
 import { LegalModal } from './components/LegalModal';
 import { Icon } from './components/Icon';
 import { COLLECTIONS as STATIC_COLLECTIONS, CATEGORIES_GENERAL, CATEGORIES_HIM, CATEGORIES_HER, CATEGORIES_COUPLES, CATEGORIES_GAY, CATEGORIES_TRANS, CATEGORIES_LESBIAN } from './constants';
-import { Video, UserMode, AIMoodResponse, Creator, Collection } from './types';
-import { GuidedSessionOverlay } from './components/GuidedSessionOverlay';
-import { BodyRatings } from './components/BodyRatings';
+import { Video, UserMode, Creator, Collection } from './types';
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
 import { VideoService } from './services/videoService';
 import { GeoBlock } from './components/GeoBlock';
@@ -70,7 +66,6 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, userMode, currentView,
   console.log('[MainContent] Rendering, currentView:', currentView);
   const { t } = useLanguage();
   const [activeCategory, setActiveCategory] = useState('All');
-  const [aiMood, setAiMood] = useState<AIMoodResponse | null>(null);
   const [videos, setVideos] = useState<Video[]>([]);
   const [creators, setCreators] = useState<Creator[]>([]);
   const [collections, setCollections] = useState<Collection[]>(STATIC_COLLECTIONS);
@@ -123,11 +118,6 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, userMode, currentView,
     };
     loadData();
   }, [userMode, activeCategory, currentView]);
-
-  // AI Mood Filter Logic
-  const displayVideos = aiMood 
-    ? videos.slice(0, 3) 
-    : videos;
 
   // Render Logic based on View
   if (currentView === 'models') {
@@ -182,23 +172,7 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, userMode, currentView,
   return (
     <div className="flex flex-col min-h-screen">
       <div className="p-4 md:p-6 space-y-8 pb-20 flex-1">
-        <AICurator onMoodSelected={setAiMood} />
         
-        {aiMood && (
-          <div className="animate-fade-in border-l-4 border-brand-gold bg-brand-surface p-4 rounded-r-lg flex justify-between items-start shadow-lg">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-brand-gold font-bold text-sm uppercase tracking-wider font-serif">{t('curated')}</span>
-                <div className="flex gap-1">
-                   {aiMood.suggestedTags.map(t => <span key={t} className="text-[10px] bg-white/10 px-2 py-0.5 rounded text-gray-300 border border-white/5">{t}</span>)}
-                </div>
-              </div>
-              <p className="text-gray-300 italic text-sm font-serif">"{aiMood.narrativeDescription}"</p>
-            </div>
-            <button onClick={() => setAiMood(null)} className="text-gray-500 hover:text-white"><Icon name="X" size={16} /></button>
-          </div>
-        )}
-
         {/* Category Tabs */}
         <div className={`flex gap-2 overflow-x-auto pb-2 scrollbar-hide sticky top-16 z-20 py-2 -mx-4 px-4 md:mx-0 md:px-0 border-b border-white/5 bg-brand-bg/95 backdrop-blur-sm`}>
           {currentCategories.map(cat => (
@@ -209,10 +183,9 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, userMode, currentView,
         </div>
 
         <div className="relative z-10 space-y-8">
-          {!aiMood && userMode === 'General' && <AdUnit size="banner" className="w-full rounded-xl h-24 md:h-32 border-brand-accent/20" label="Sponsor" />}
           <section>
             <h2 className="text-2xl font-serif font-bold text-white mb-6 flex items-center gap-2">
-              <span className="text-brand-gold">●</span> {aiMood ? t('curated') : t('recommended')}
+              <span className="text-brand-gold">●</span> {t('recommended')}
             </h2>
             {loading ? (
                <div className="flex items-center justify-center h-64 text-brand-gold">
@@ -225,7 +198,7 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, userMode, currentView,
             )}
           </section>
           
-          {!aiMood && userMode === 'General' && collections.map(collection => (
+          {userMode === 'General' && collections.map(collection => (
             collection.videos.length > 0 && (
             <section key={collection.id} className="border-t border-brand-border pt-8">
               <div className="flex justify-between items-center mb-6">
@@ -262,8 +235,6 @@ export default function App() {
   const [currentVideo, setCurrentVideo] = useState<Video | null>(null);
   const [userMode, setUserMode] = useState<UserMode>('General');
   const [isBossMode, setIsBossMode] = useState(false);
-  const [isVelvetTouchOpen, setIsVelvetTouchOpen] = useState(false);
-  const [isChartsOpen, setIsChartsOpen] = useState(false);
   const [isLegalOpen, setIsLegalOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   
@@ -330,8 +301,6 @@ export default function App() {
           <BossMode isActive={isBossMode} onExit={() => setIsBossMode(false)} />
           {!isVerified && <AgeGate onVerify={handleVerification} />}
           
-          <GuidedSessionOverlay isActive={isVelvetTouchOpen} userMode={userMode} onClose={() => setIsVelvetTouchOpen(false)} standalone={true} />
-          {isChartsOpen && <BodyRatings userMode={userMode} onClose={() => setIsChartsOpen(false)} />}
           {isLegalOpen && <LegalModal onClose={() => setIsLegalOpen(false)} />}
           {isAuthOpen && <AuthModal onClose={() => setIsAuthOpen(false)} />}
 
@@ -350,8 +319,6 @@ export default function App() {
                isOpen={isSidebarOpen} 
                currentView={currentView}
                onChangeView={(view) => { setCurrentView(view); setCurrentVideo(null); }}
-               onOpenVelvetTouch={() => setIsVelvetTouchOpen(true)}
-               onOpenCharts={() => setIsChartsOpen(true)}
              />
 
              <main className={`pt-16 transition-all duration-300 ${isSidebarOpen ? 'md:ml-60' : 'md:ml-20'}`}>

@@ -1,6 +1,5 @@
 import React from 'react';
 import { Icon } from './Icon';
-import { AdUnit } from './AdUnit';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -10,11 +9,10 @@ interface SidebarProps {
   isOpen: boolean;
   currentView: ViewType;
   onChangeView: (view: ViewType) => void;
-  onOpenCharts?: () => void;
   onOpenLegal?: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentView, onChangeView, onOpenCharts, onOpenLegal }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentView, onChangeView, onOpenLegal }) => {
   const { t } = useLanguage();
   const { isAdmin } = useAuth();
   
@@ -54,16 +52,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentView, onChangeV
                 <span className="absolute -top-1 -right-1 w-2 h-2 bg-brand-accent rounded-full animate-ping" />
              </div>
              <span className={`text-sm font-bold uppercase tracking-wide ${!isOpen && 'md:hidden'}`}>{t('live_cam')}</span>
-          </button>
-          
-          <button 
-             onClick={onOpenCharts}
-             className={`w-full flex items-center gap-4 px-3 py-2.5 rounded-lg text-yellow-300 hover:bg-white/5 transition group`}
-          >
-             <Icon name="Trophy" size={22} className="text-yellow-500" />
-             <div className={`text-left ${!isOpen && 'md:hidden'}`}>
-                <span className="block text-sm font-bold uppercase tracking-wide">{t('charts')}</span>
-             </div>
           </button>
         </div>
 
@@ -118,17 +106,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentView, onChangeV
              </div>
           </div>
         )}
-
-        {/* Sidebar Ad - Bottom */}
-        <div className="mt-auto px-4 pb-6 pt-4">
-           {isOpen ? (
-             <AdUnit size="square" label={t('ad')} className="h-48" />
-           ) : (
-             <div className="hidden md:flex w-full aspect-square bg-brand-surface rounded items-center justify-center text-[10px] text-gray-600 border border-white/5">
-                {t('ad_label')}
-             </div>
-           )}
-        </div>
       </div>
     </aside>
   );

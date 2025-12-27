@@ -1,12 +1,23 @@
-import { GoogleGenAI, Type } from "@google/genai";
+// import { GoogleGenAI, Type } from "@google/genai";
 import { AIMoodResponse } from '../types';
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Mocking AI service to prevent crash due to missing API Key
+// const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const getCuratedMood = async (userPrompt: string): Promise<AIMoodResponse | null> => {
+  console.log("[Gemini] Service is currently disabled/mocked. Prompt:", userPrompt);
+  
+  // Return immediate fallback
+  return {
+    suggestedTags: ['Curated', 'Cinematic', 'Selection'],
+    narrativeDescription: "AI curation is temporarily unavailable. Enjoy this classic selection.",
+    moodColor: '#D4AF37'
+  };
+
+  /*
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-1.5-flash',
       contents: `User request for video atmosphere/curation: "${userPrompt}". 
       
       Context: A premium adult video aggregator platform.
@@ -47,4 +58,5 @@ export const getCuratedMood = async (userPrompt: string): Promise<AIMoodResponse
       moodColor: '#D4AF37'
     };
   }
+  */
 };
