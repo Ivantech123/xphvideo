@@ -66,7 +66,10 @@ export const TubeAdapter = {
   // EPORNER API (Documentation: https://www.eporner.com/api/v2/)
   async fetchEporner(query: string = '4k', limit: number = 20): Promise<Video[]> {
     try {
-      const response = await fetch(`https://www.eporner.com/api/v2_video/search/?query=${query}&per_page=${limit}&thumbsize=big&order=top-weekly&json=json`);
+      const PROXY = 'https://corsproxy.io/?'; 
+      const API_URL = `https://www.eporner.com/api/v2_video/search/?query=${query}&per_page=${limit}&thumbsize=big&order=top-weekly&json=json`;
+      
+      const response = await fetch(PROXY + encodeURIComponent(API_URL));
       
       if (!response.ok) throw new Error('Network response was not ok');
       
@@ -240,7 +243,10 @@ export const TubeAdapter = {
     if (id.startsWith('ep_')) {
       const realId = id.replace('ep_', '');
       try {
-        const response = await fetch(`https://www.eporner.com/api/v2_video/id/?id=${realId}&thumbsize=big&json=json`);
+        const PROXY = 'https://corsproxy.io/?';
+        const API_URL = `https://www.eporner.com/api/v2_video/id/?id=${realId}&thumbsize=big&json=json`;
+        
+        const response = await fetch(PROXY + encodeURIComponent(API_URL));
         if (!response.ok) throw new Error('Eporner ID fetch failed');
         const data: EpornerVideo = await response.json();
         
