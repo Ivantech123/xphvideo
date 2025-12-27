@@ -65,6 +65,7 @@ interface HomeProps {
 }
 
 const MainContent: React.FC<HomeProps> = ({ onVideoClick, userMode, currentView, onOpenLegal }) => {
+  console.log('[MainContent] Rendering, currentView:', currentView);
   const { t } = useLanguage();
   const [activeCategory, setActiveCategory] = useState('All');
   const [aiMood, setAiMood] = useState<AIMoodResponse | null>(null);
@@ -91,10 +92,13 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, userMode, currentView,
   useEffect(() => {
     setActiveCategory(currentCategories[0]);
     const loadData = async () => {
+      console.log('[MainContent] Loading data...');
       setLoading(true);
       try {
         // 1. Fetch Videos
+        console.log('[MainContent] Fetching videos for', userMode, activeCategory);
         const vids = await VideoService.getVideos(userMode, activeCategory);
+        console.log('[MainContent] Got videos:', vids.length);
         
         // 2. Filter by View Type (History/Favs)
         if (currentView === 'favorites') {
@@ -250,6 +254,7 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, userMode, currentView,
 // --- APP ROOT ---
 
 export default function App() {
+  console.log('[App] Component mounting...');
   const [isVerified, setIsVerified] = useState<boolean | null>(null);
   const [isSidebarOpen, setSidebarOpen] = useState(true);
   const [currentVideo, setCurrentVideo] = useState<Video | null>(null);
@@ -263,8 +268,11 @@ export default function App() {
   const [currentView, setCurrentView] = useState<'home'|'models'|'categories'|'favorites'|'history'>('home');
 
   useEffect(() => {
+    console.log('[App] Checking age verification...');
     const verified = localStorage.getItem('velvet_age_verified');
+    console.log('[App] velvet_age_verified from localStorage:', verified);
     setIsVerified(verified === 'true');
+    console.log('[App] isVerified set to:', verified === 'true');
   }, []);
 
   const handleVerification = () => {
@@ -295,7 +303,20 @@ export default function App() {
     setCurrentVideo(v);
   };
 
-  if (isVerified === null) return null;
+  console.log('[App] Current isVerified state:', isVerified);
+
+  if (isVerified === null) {
+    console.log('[App] isVerified is null, showing loading spinner');
+    return (
+      <div className="fixed inset-0 bg-black flex items-center justify-center">
+        <div className="w-16 h-16 rounded-full bg-amber-500/10 flex items-center justify-center border border-amber-500/30 animate-pulse">
+          <span className="font-serif font-black text-2xl text-amber-500">V</span>
+        </div>
+      </div>
+    );
+  }
+
+  console.log('[App] Rendering main app, isVerified:', isVerified);
 
   return (
     <LanguageProvider>
