@@ -160,7 +160,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose, onVide
                <button className="bg-brand-accent hover:bg-red-600 text-white px-6 py-2 rounded-full text-sm font-bold uppercase tracking-wide shadow-lg shadow-red-900/20 transition transform hover:scale-105">{t('subscribe')}</button>
             </div>
 
-            <div className="bg-brand-surface/50 p-4 rounded-xl text-sm text-gray-300 mt-4">
+            <div className={`bg-brand-surface/50 p-4 rounded-xl text-sm text-gray-300 mt-4 transition-all duration-300 ${isBlurred ? 'blur-md select-none opacity-50' : ''}`}>
                <p className="leading-relaxed">{video.description}</p>
             </div>
           </div>
