@@ -450,6 +450,7 @@ const VelvetApp = () => {
                isOpen={isSidebarOpen} 
                currentView={currentView}
                onChangeView={(view) => { setCurrentView(view); setCurrentVideo(null); setCurrentCreator(null); setSearchQuery(''); }}
+               onSearch={setSearchQuery}
              />
 
              <main className={`pt-16 transition-all duration-300 ${isSidebarOpen ? 'md:ml-60' : 'md:ml-20'}`}>
