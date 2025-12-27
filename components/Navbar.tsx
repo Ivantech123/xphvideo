@@ -3,6 +3,7 @@ import { Icon } from './Icon';
 import { UserMode } from '../types';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
+import { CATEGORIES_GENERAL, CATEGORIES_HIM, CATEGORIES_HER, CATEGORIES_GAY, CATEGORIES_TRANS } from '../constants';
 
 interface NavbarProps {
   onMenuClick: () => void;
@@ -14,6 +15,14 @@ interface NavbarProps {
   onAuthClick: () => void;
   onSearch: (query: string) => void;
 }
+
+const ALL_TAGS = Array.from(new Set([
+  ...CATEGORIES_GENERAL,
+  ...CATEGORIES_HIM,
+  ...CATEGORIES_HER,
+  ...CATEGORIES_GAY,
+  ...CATEGORIES_TRANS
+]));
 
 export const Navbar: React.FC<NavbarProps> = ({ 
   onMenuClick, 
@@ -30,19 +39,45 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [showModeMenu, setShowModeMenu] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [searchValue, setSearchValue] = useState('');
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLDivElement>(null);
 
   const handleSearch = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       onSearch(searchValue);
       setMobileSearchOpen(false);
+      setShowSuggestions(false);
     }
   };
+
+  const handleSuggestionClick = (suggestion: string) => {
+    setSearchValue(suggestion);
+    onSearch(suggestion);
+    setMobileSearchOpen(false);
+    setShowSuggestions(false);
+  };
+
+  useEffect(() => {
+    if (searchValue.trim().length > 1) {
+      const lower = searchValue.toLowerCase();
+      const filtered = ALL_TAGS.filter(tag => tag.toLowerCase().includes(lower)).slice(0, 8);
+      setSuggestions(filtered);
+      setShowSuggestions(true);
+    } else {
+      setSuggestions([]);
+      setShowSuggestions(false);
+    }
+  }, [searchValue]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setShowModeMenu(false);
+      }
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);

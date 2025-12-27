@@ -7,11 +7,19 @@ interface VideoCardProps {
   video: Video;
   compact?: boolean; // For sidebar lists
   onClick?: () => void;
+  onCreatorClick?: (creator: any) => void;
 }
 
-export const VideoCard: React.FC<VideoCardProps> = ({ video, compact = false, onClick }) => {
+export const VideoCard: React.FC<VideoCardProps> = ({ video, compact = false, onClick, onCreatorClick }) => {
   const { t } = useLanguage();
   const [isHovered, setIsHovered] = useState(false);
+
+  const handleCreatorClick = (e: React.MouseEvent) => {
+    if (onCreatorClick) {
+        e.stopPropagation();
+        onCreatorClick(video.creator);
+    }
+  };
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -87,8 +95,8 @@ export const VideoCard: React.FC<VideoCardProps> = ({ video, compact = false, on
 
       {/* Info Section */}
       <div className="flex gap-3 items-start pr-2">
-        <div className="flex-shrink-0 relative">
-          <img src={video.creator.avatar} className="w-10 h-10 rounded-full object-cover border border-white/10" alt="Avatar" />
+        <div className="flex-shrink-0 relative cursor-pointer" onClick={handleCreatorClick}>
+          <img src={video.creator.avatar} className="w-10 h-10 rounded-full object-cover border border-white/10 hover:border-brand-gold transition-colors" alt="Avatar" />
           {video.creator.verified && (
              <div className="absolute -bottom-1 -right-1 bg-blue-500 rounded-full p-0.5 border border-black">
                <Icon name="Check" size={8} className="text-white" />
@@ -100,7 +108,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({ video, compact = false, on
           <h3 className="text-white font-medium text-sm leading-tight line-clamp-2 mb-1 group-hover:text-brand-gold transition">
             {video.title}
           </h3>
-          <div className="flex items-center gap-1 text-xs text-gray-400 hover:text-white transition">
+          <div className="flex items-center gap-1 text-xs text-gray-400 hover:text-white transition cursor-pointer w-fit" onClick={handleCreatorClick}>
             <span>{video.creator.name}</span>
           </div>
           <div className="flex items-center gap-2 text-[11px] text-gray-500 mt-0.5 font-medium">

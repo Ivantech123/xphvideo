@@ -35,9 +35,9 @@ export const VideoService = {
         
         // Parallel fetch from multiple providers
         const [epornerVids, phVids, xvVids] = await Promise.all([
-          TubeAdapter.fetchEporner(query, 12),
-          TubeAdapter.fetchPornhub(query),
-          TubeAdapter.fetchXVideos(query)
+          TubeAdapter.fetchEporner(query, 24, page),
+          TubeAdapter.fetchPornhub(query, page),
+          TubeAdapter.fetchXVideos(query, page)
         ]);
         
         // Interleave videos to mix sources

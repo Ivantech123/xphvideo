@@ -16,13 +16,14 @@ import { VideoService } from './services/videoService';
 import { GeoBlock } from './components/GeoBlock';
 import { AuthProvider } from './contexts/AuthContext';
 import { AuthModal } from './components/AuthModal';
+import { ProfileView } from './components/ProfileView';
 
 // --- NEW PAGES (Internal Components for cleaner file) ---
 
-const ModelsGrid = ({ creators }: { creators: Creator[] }) => (
+const ModelsGrid = ({ creators, onCreatorClick }: { creators: Creator[], onCreatorClick: (c: Creator) => void }) => (
   <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
     {creators.map(c => (
-      <div key={c.id} className="bg-brand-surface border border-white/5 rounded-xl overflow-hidden hover:border-brand-gold/50 transition group cursor-pointer">
+      <div key={c.id} onClick={() => onCreatorClick(c)} className="bg-brand-surface border border-white/5 rounded-xl overflow-hidden hover:border-brand-gold/50 transition group cursor-pointer">
         <div className="aspect-square bg-gray-800 relative">
           <img src={c.avatar} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
           {c.tier === 'Exclusive' && <div className="absolute top-2 right-2 bg-brand-gold text-black text-[10px] font-bold px-2 py-0.5 rounded">VIP</div>}
@@ -41,10 +42,10 @@ const ModelsGrid = ({ creators }: { creators: Creator[] }) => (
   </div>
 );
 
-const CategoryGrid = ({ categories }: { categories: string[] }) => (
+const CategoryGrid = ({ categories, onSelectCategory }: { categories: string[], onSelectCategory: (cat: string) => void }) => (
   <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
     {categories.slice(1).map(cat => ( // Skip "All"
-      <div key={cat} className="aspect-video bg-gray-800 rounded-lg relative overflow-hidden group cursor-pointer border border-white/10 hover:border-brand-gold">
+      <div key={cat} onClick={() => onSelectCategory(cat)} className="aspect-video bg-gray-800 rounded-lg relative overflow-hidden group cursor-pointer border border-white/10 hover:border-brand-gold">
          <div className="absolute inset-0 bg-black/60 group-hover:bg-black/40 transition"></div>
          {/* Mock gradient instead of real image for category */}
          <div className="absolute inset-0 bg-gradient-to-tr from-brand-accent/20 to-transparent"></div>
@@ -59,20 +60,26 @@ const CategoryGrid = ({ categories }: { categories: string[] }) => (
 // --- MAIN CONTENT WRAPPER ---
 interface HomeProps {
   onVideoClick: (v: Video) => void;
+  onCreatorClick: (c: Creator) => void;
   userMode: UserMode;
   currentView: 'home' | 'models' | 'categories' | 'favorites' | 'history';
   onOpenLegal: () => void;
   searchQuery: string;
+  setSearchQuery: (q: string) => void;
+  setActiveCategory: (c: string) => void;
+  activeCategory: string;
 }
 
-const MainContent: React.FC<HomeProps> = ({ onVideoClick, userMode, currentView, onOpenLegal, searchQuery }) => {
+const MainContent: React.FC<HomeProps> = ({ onVideoClick, onCreatorClick, userMode, currentView, onOpenLegal, searchQuery, setSearchQuery, setActiveCategory, activeCategory }) => {
   console.log('[MainContent] Rendering, currentView:', currentView);
   const { t } = useLanguage();
-  const [activeCategory, setActiveCategory] = useState('All');
+  // const [activeCategory, setActiveCategory] = useState('All'); // Lifted up
   const [videos, setVideos] = useState<Video[]>([]);
   const [creators, setCreators] = useState<Creator[]>([]);
   const [collections, setCollections] = useState<Collection[]>(STATIC_COLLECTIONS);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
   
   // Dynamic Category List
   const getCategories = () => {
@@ -88,6 +95,13 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, userMode, currentView,
   };
   const currentCategories = getCategories();
 
+  // Reset page and videos when filter changes
+  useEffect(() => {
+    setPage(1);
+    setVideos([]);
+    setHasMore(true);
+  }, [userMode, activeCategory, searchQuery]);
+
   // Load Data Effect
   useEffect(() => {
     // If search is active, use it. Otherwise use active category.
@@ -100,27 +114,33 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, userMode, currentView,
     }
 
     const loadData = async () => {
-      console.log('[MainContent] Loading data...');
+      console.log(`[MainContent] Loading data page ${page}...`);
       setLoading(true);
       try {
         // 1. Fetch Videos
-        console.log('[MainContent] Fetching videos for', userMode, searchQuery || activeCategory);
         const query = searchQuery || activeCategory;
-        const vids = await VideoService.getVideos(userMode, query);
-        console.log('[MainContent] Got videos:', vids.length);
+        const vids = await VideoService.getVideos(userMode, query, page);
         
+        if (vids.length === 0) setHasMore(false);
+
         // 2. Filter by View Type (History/Favs)
         if (currentView === 'favorites') {
           setVideos(VideoService.getFavorites());
+          setHasMore(false); // No pagination for local lists yet
         } else if (currentView === 'history') {
           setVideos(VideoService.getHistory());
+          setHasMore(false);
         } else {
-          // Normal Home / Category View
-          setVideos(vids);
+          // Normal Home / Category View - Append if page > 1
+          if (page === 1) {
+             setVideos(vids);
+          } else {
+             setVideos(prev => [...prev, ...vids]);
+          }
         }
 
         // 3. Fetch Creators
-        if (currentView === 'models') {
+        if (currentView === 'models' && page === 1) {
           const c = await VideoService.getCreators();
           setCreators(c);
         }
@@ -129,14 +149,7 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, userMode, currentView,
       }
     };
     loadData();
-  }, [userMode, activeCategory, currentView, searchQuery]);
-
-  // Expose search handler for parent to call (via props, but here we just need to react to props)
-  // Actually, MainContent needs to receive the search query or handler. 
-  // Let's lift the state up to App, or handle it via props.
-  // Wait, MainContent is a child. App has the Navbar. 
-  // We need to pass onSearch from Navbar -> App -> MainContent (or state in App).
-
+  }, [userMode, activeCategory, currentView, searchQuery, page]);
 
   // Render Logic based on View
   if (currentView === 'models') {
@@ -144,7 +157,7 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, userMode, currentView,
       <div className="flex flex-col min-h-screen">
         <div className="p-6 flex-1">
           <h2 className="text-2xl font-serif font-bold text-white mb-6 flex items-center gap-2"><Icon name="Users" /> {t('models')}</h2>
-          <ModelsGrid creators={creators} />
+          <ModelsGrid creators={creators} onCreatorClick={onCreatorClick} />
         </div>
         <Footer onOpenLegal={onOpenLegal} />
       </div>
@@ -156,7 +169,22 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, userMode, currentView,
        <div className="flex flex-col min-h-screen">
         <div className="p-6 flex-1">
           <h2 className="text-2xl font-serif font-bold text-white mb-6 flex items-center gap-2"><Icon name="LayoutGrid" /> {t('categories')}</h2>
-          <CategoryGrid categories={currentCategories} />
+          <CategoryGrid 
+            categories={currentCategories} 
+            onSelectCategory={(cat) => {
+                setActiveCategory(cat);
+                setSearchQuery('');
+                // Need to switch view to home? Assuming parent handles or MainContent re-renders
+                // We should probably tell parent to switch to 'home' if we are in 'categories' view
+                // But MainContent props don't allow changing view. 
+                // It's better if onSelectCategory also triggers view change in parent if possible, 
+                // or we handle it by just changing activeCategory and hope user navigates back.
+                // Actually, let's assume the user clicks a category and wants to see videos.
+                // We can't change currentView here easily without prop. 
+                // Let's rely on the user navigating or restructure. 
+                // For now, simpler: pass a callback that does both.
+            }} 
+          />
         </div>
         <Footer onOpenLegal={onOpenLegal} />
       </div>
@@ -178,7 +206,7 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, userMode, currentView,
              </div>
            ) : (
              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                {videos.map(video => <VideoCard key={video.id} video={video} onClick={() => onVideoClick(video)} />)}
+                {videos.map(video => <VideoCard key={video.id} video={video} onClick={() => onVideoClick(video)} onCreatorClick={onCreatorClick} />)}
              </div>
            )}
         </div>
@@ -206,14 +234,26 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, userMode, currentView,
             <h2 className="text-2xl font-serif font-bold text-white mb-6 flex items-center gap-2">
               <span className="text-brand-gold">●</span> {t('recommended')}
             </h2>
-            {loading ? (
-               <div className="flex items-center justify-center h-64 text-brand-gold">
-                 <Icon name="Loader2" size={48} className="animate-spin" />
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-8">
+              {videos.map(video => <VideoCard key={video.id} video={video} onClick={() => onVideoClick(video)} onCreatorClick={onCreatorClick} />)}
+            </div>
+
+            {loading && (
+               <div className="flex items-center justify-center h-24 text-brand-gold mt-8">
+                 <Icon name="Loader2" size={32} className="animate-spin" />
                </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-8">
-                {videos.map(video => <VideoCard key={video.id} video={video} onClick={() => onVideoClick(video)} />)}
-              </div>
+            )}
+
+            {!loading && hasMore && videos.length > 0 && (
+               <div className="flex justify-center mt-12">
+                 <button 
+                   onClick={() => setPage(p => p + 1)}
+                   className="bg-white/5 hover:bg-white/10 text-white px-8 py-3 rounded-full font-bold text-sm transition border border-white/10 hover:border-brand-gold/50"
+                 >
+                   {t('load_more') || 'Load More'}
+                 </button>
+               </div>
             )}
           </section>
           
@@ -231,7 +271,7 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, userMode, currentView,
                   <button className="text-brand-gold text-xs font-bold uppercase tracking-widest hover:underline">{t('view_all')}</button>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {collection.videos.map(video => <VideoCard key={video.id} video={video} onClick={() => onVideoClick(video)} />)}
+                  {collection.videos.map(video => <VideoCard key={video.id} video={video} onClick={() => onVideoClick(video)} onCreatorClick={onCreatorClick} />)}
               </div>
             </section>
             )
@@ -252,11 +292,13 @@ export default function App() {
   const [isVerified, setIsVerified] = useState<boolean | null>(null);
   const [isSidebarOpen, setSidebarOpen] = useState(true);
   const [currentVideo, setCurrentVideo] = useState<Video | null>(null);
+  const [currentCreator, setCurrentCreator] = useState<Creator | null>(null);
   const [userMode, setUserMode] = useState<UserMode>('General');
   const [isBossMode, setIsBossMode] = useState(false);
   const [isLegalOpen, setIsLegalOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeCategory, setActiveCategory] = useState('All');
   
   // Navigation State
   const [currentView, setCurrentView] = useState<'home'|'models'|'categories'|'favorites'|'history'>('home');
@@ -297,6 +339,12 @@ export default function App() {
     setCurrentVideo(v);
   };
 
+  // Handle Creator Click
+  const handleCreatorClick = (c: Creator) => {
+    setCurrentCreator(c);
+    setCurrentVideo(null); // Close video if open
+  };
+
   console.log('[App] Current isVerified state:', isVerified);
 
   if (isVerified === null) {
@@ -327,7 +375,7 @@ export default function App() {
           <div className={`transition-opacity duration-500 ${!isVerified ? 'opacity-0 h-0 overflow-hidden' : 'opacity-100'}`}>
              <Navbar 
                 onMenuClick={toggleSidebar} 
-                onHomeClick={() => { setCurrentVideo(null); setCurrentView('home'); setSearchQuery(''); }} 
+                onHomeClick={() => { setCurrentVideo(null); setCurrentCreator(null); setCurrentView('home'); setSearchQuery(''); }} 
                 onPanic={handlePanic}
                 userMode={userMode}
                 onModeChange={setUserMode}
@@ -339,7 +387,7 @@ export default function App() {
              <Sidebar 
                isOpen={isSidebarOpen} 
                currentView={currentView}
-               onChangeView={(view) => { setCurrentView(view); setCurrentVideo(null); setSearchQuery(''); }}
+               onChangeView={(view) => { setCurrentView(view); setCurrentVideo(null); setCurrentCreator(null); setSearchQuery(''); }}
              />
 
              <main className={`pt-16 transition-all duration-300 ${isSidebarOpen ? 'md:ml-60' : 'md:ml-20'}`}>
@@ -348,14 +396,32 @@ export default function App() {
                     video={currentVideo} 
                     onClose={() => setCurrentVideo(null)} 
                     onVideoChange={handleVideoClick}
+                    onCreatorClick={handleCreatorClick}
+                  />
+                ) : currentCreator ? (
+                  <ProfileView 
+                    creator={currentCreator} 
+                    onVideoClick={handleVideoClick} 
+                    onBack={() => setCurrentCreator(null)} 
                   />
                 ) : (
                   <MainContent 
-                    onVideoClick={handleVideoClick} 
+                    onVideoClick={handleVideoClick}
+                    onCreatorClick={handleCreatorClick}
                     userMode={userMode} 
                     currentView={currentView}
                     onOpenLegal={() => setIsLegalOpen(true)}
                     searchQuery={searchQuery}
+                    setSearchQuery={setSearchQuery}
+                    activeCategory={activeCategory}
+                    setActiveCategory={(cat) => {
+                        setActiveCategory(cat);
+                        // If selecting category from 'categories' view, switch to 'home'
+                        if (currentView === 'categories') {
+                            setCurrentView('home');
+                            setSearchQuery('');
+                        }
+                    }}
                   />
                 )}
              </main>

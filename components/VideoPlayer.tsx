@@ -12,9 +12,10 @@ interface VideoPlayerProps {
   video: Video;
   onClose: () => void;
   onVideoChange: (video: Video) => void;
+  onCreatorClick?: (creator: any) => void;
 }
 
-export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose, onVideoChange }) => {
+export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose, onVideoChange, onCreatorClick }) => {
   const { t } = useLanguage();
   const { user } = useAuth();
   const [isBlurred, setIsBlurred] = useState(false);
@@ -34,7 +35,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose, onVide
     const loadRelated = async () => {
        const query = video.tags?.[0]?.label || 'popular';
        const vids = await VideoService.getVideos('General', query);
-       setRelatedVideos(vids.slice(0, 6));
+       setRelatedVideos(vids.slice(0, 12));
     };
     loadRelated();
   }, [video, user]);
@@ -55,6 +56,12 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose, onVide
     } else {
         await SubscriptionService.subscribe(video.creator.id, video.creator.name, video.creator.avatar);
         setIsSubscribed(true);
+    }
+  };
+
+  const handleCreatorClick = () => {
+    if (onCreatorClick) {
+        onCreatorClick(video.creator);
     }
   };
 
