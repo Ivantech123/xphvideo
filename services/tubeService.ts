@@ -66,14 +66,16 @@ export const TubeAdapter = {
   // EPORNER API (Documentation: https://www.eporner.com/api/v2/)
   async fetchEporner(query: string = '4k', limit: number = 20, page: number = 1): Promise<Video[]> {
     try {
-      const PROXY = 'https://corsproxy.io/?'; 
+      // Using allorigins to bypass CORS and avoid 301 redirects issues with other proxies
       const API_URL = `https://www.eporner.com/api/v2_video/search/?query=${query}&per_page=${limit}&page=${page}&thumbsize=big&order=top-weekly&json=json`;
+      const PROXY_URL = `https://api.allorigins.win/get?url=${encodeURIComponent(API_URL)}`;
       
-      const response = await fetch(PROXY + encodeURIComponent(API_URL));
+      const response = await fetch(PROXY_URL);
       
       if (!response.ok) throw new Error('Network response was not ok');
       
-      const data: EpornerResponse = await response.json();
+      const wrapper = await response.json();
+      const data: EpornerResponse = JSON.parse(wrapper.contents);
       
       return data.videos.map(ev => ({
         id: `ep_${ev.id}`,
@@ -119,12 +121,13 @@ export const TubeAdapter = {
 
        return data.videos.map(ph => {
          const creatorName = ph.pornstars?.[0]?.pornstar_name || 'Pornhub Network';
-         const tagsArray = Array.isArray(ph.tags) ? ph.tags.map((t: any) => typeof t === 'string' ? t : (t.tag_name || 'Tag')) : [];
+         // Ensure tags are strings before joining
+         const tagsList = Array.isArray(ph.tags) ? ph.tags.map((t: any) => typeof t === 'string' ? t : (t.tag_name || 'Tag')) : [];
          
          return {
           id: `ph_${ph.video_id}`,
           title: ph.title,
-          description: tagsArray.join(', ') || 'No description available',
+          description: tagsList.join(', ') || 'No description available',
           thumbnail: ph.default_thumb,
           videoUrl: '', 
           embedUrl: `https://www.pornhub.com/embed/${ph.video_id}`,
@@ -180,14 +183,15 @@ export const TubeAdapter = {
   // XVIDEOS API (Scraper via Proxy)
   async fetchXVideos(query: string = 'best', page: number = 1): Promise<Video[]> {
     try {
-      const PROXY = 'https://corsproxy.io/?';
       // XVideos search url. Page parameter is 'p'
       const TARGET_URL = `https://www.xvideos.com/?k=${encodeURIComponent(query)}&p=${page}&sort=relevance`;
+      const PROXY_URL = `https://api.allorigins.win/get?url=${encodeURIComponent(TARGET_URL)}`;
       
-      const response = await fetch(PROXY + encodeURIComponent(TARGET_URL));
+      const response = await fetch(PROXY_URL);
       if (!response.ok) throw new Error('XVideos fetch failed');
       
-      const html = await response.text();
+      const wrapper = await response.json();
+      const html = wrapper.contents;
       const parser = new DOMParser();
       const doc = parser.parseFromString(html, 'text/html');
       
@@ -246,12 +250,14 @@ export const TubeAdapter = {
     if (id.startsWith('ep_')) {
       const realId = id.replace('ep_', '');
       try {
-        const PROXY = 'https://corsproxy.io/?';
         const API_URL = `https://www.eporner.com/api/v2_video/id/?id=${realId}&thumbsize=big&json=json`;
+        const PROXY_URL = `https://api.allorigins.win/get?url=${encodeURIComponent(API_URL)}`;
         
-        const response = await fetch(PROXY + encodeURIComponent(API_URL));
+        const response = await fetch(PROXY_URL);
         if (!response.ok) throw new Error('Eporner ID fetch failed');
-        const data: EpornerVideo = await response.json();
+        
+        const wrapper = await response.json();
+        const data: EpornerVideo = JSON.parse(wrapper.contents);
         
         // Map single object
         return {
@@ -297,10 +303,13 @@ export const TubeAdapter = {
          if (!ph) return undefined;
 
          const creatorName = ph.pornstars?.[0]?.pornstar_name || 'Pornhub Network';
+         // Fix tags [object Object]
+         const tagsList = Array.isArray(ph.tags) ? ph.tags.map((t: any) => typeof t === 'string' ? t : (t.tag_name || 'Tag')) : [];
+
          return {
             id: `ph_${ph.video_id}`,
             title: ph.title,
-            description: `Rating: ${ph.rating}% • Views: ${ph.views}`,
+            description: tagsList.join(', ') || `Rating: ${ph.rating}% • Views: ${ph.views}`,
             thumbnail: ph.default_thumb,
             videoUrl: '', 
             embedUrl: `https://www.pornhub.com/embed/${ph.video_id}`,
@@ -312,10 +321,7 @@ export const TubeAdapter = {
               verified: true,
               tier: 'Standard'
             },
-            tags: Array.isArray(ph.tags) ? ph.tags.map((t: any, i) => ({ 
-              id: `pht_${i}`, 
-              label: typeof t === 'string' ? t : (t.tag_name || 'Tag') 
-            })) : [],
+            tags: tagsList.map((t, i) => ({ id: `pht_${i}`, label: t })),
             views: Number(ph.views),
             quality: 'HD',
             source: 'Pornhub'
@@ -330,13 +336,14 @@ export const TubeAdapter = {
     if (id.startsWith('xv_')) {
       const realId = id.replace('xv_', '');
       try {
-        const PROXY = 'https://corsproxy.io/?';
         const TARGET_URL = `https://www.xvideos.com/video${realId}`;
+        const PROXY_URL = `https://api.allorigins.win/get?url=${encodeURIComponent(TARGET_URL)}`;
         
-        const response = await fetch(PROXY + encodeURIComponent(TARGET_URL));
+        const response = await fetch(PROXY_URL);
         if (!response.ok) throw new Error('XVideos ID fetch failed');
         
-        const html = await response.text();
+        const wrapper = await response.json();
+        const html = wrapper.contents;
         const parser = new DOMParser();
         const doc = parser.parseFromString(html, 'text/html');
         

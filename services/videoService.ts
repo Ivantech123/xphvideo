@@ -100,6 +100,16 @@ export const VideoService = {
     return []; 
   },
 
+  async getCreatorById(id: string): Promise<Creator | undefined> {
+    try {
+        const creators = await this.getCreators();
+        return creators.find(c => c.id === id);
+    } catch (e) {
+        console.warn("Failed to fetch creator by ID", e);
+        return undefined;
+    }
+  },
+
   // --- LOCAL STORAGE HELPERS (History/Favorites) ---
   
   addToHistory(video: Video) {

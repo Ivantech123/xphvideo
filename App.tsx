@@ -213,7 +213,15 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, onCreatorClick, userMo
         
         <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center sticky top-16 z-20 bg-brand-bg/95 backdrop-blur-sm py-2 -mx-4 px-4 md:mx-0 md:px-0 border-b border-white/5">
           {/* Category Tabs */}
-          <div className={`flex gap-2 overflow-x-auto pb-2 md:pb-0 scrollbar-hide flex-1 max-w-full`}>
+          <div className={`flex gap-2 overflow-x-auto pb-2 md:pb-0 scrollbar-hide flex-1 max-w-full items-center`}>
+            <button 
+               onClick={() => { setCurrentView('categories'); setSearchQuery(''); }}
+               className="px-3 py-1.5 rounded bg-white/10 hover:bg-white/20 text-white transition flex-shrink-0 border border-white/5"
+               title={t('categories')}
+            >
+               <Icon name="Grid" size={16} />
+            </button>
+            <div className="w-px h-6 bg-white/10 mx-1 flex-shrink-0"></div>
             {currentCategories.map(cat => (
               <button key={cat} onClick={() => setActiveCategory(cat)} className={`px-4 py-1.5 rounded-none text-xs font-bold whitespace-nowrap transition border-b-2 ${activeCategory === cat ? 'border-brand-gold text-brand-gold' : 'border-transparent text-gray-400 hover:text-white'}`}>
                 {cat}
@@ -326,10 +334,10 @@ const VelvetApp = () => {
     }
 
     if (creatorId && !currentCreator) {
-      // Ideally fetch creator by ID, for now we might need a method or pass partial
-      // Since we don't have getCreatorById easily without fetching list, we skip or impl later.
-      // Or we can assume we only link to creators loaded in list. 
-      // For MVP, maybe skip auto-loading creator from URL if complex.
+      // Fetch creator by ID from URL param
+      VideoService.getCreatorById(creatorId).then(c => {
+        if (c) setCurrentCreator(c);
+      });
     }
 
     if (query) {
