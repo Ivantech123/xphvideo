@@ -237,7 +237,6 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, onCreatorClick, userMo
 
           {/* Source Filter */}
           <div className="flex items-center gap-2 flex-shrink-0 self-end md:self-auto">
-          <div className="flex items-center gap-2 flex-shrink-0">
              <span className="text-xs text-gray-500 font-bold uppercase hidden md:inline">{t('source') || 'Source'}:</span>
              <select 
                value={activeSource} 

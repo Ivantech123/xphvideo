@@ -63,8 +63,8 @@ export const CATEGORY_MAP: Record<string, string> = {
   'Ледибой': 'ladyboy',
   'Транссексуалы': 'shemale',
   'Женственные': 'passable',
-  'Азиатки': 'trans_asian',
-  'Латинки': 'trans_latin',
+  'Транс азиатки': 'trans_asian',
+  'Транс латинки': 'trans_latin',
 
   // General / Additional
   'Тату': 'tattoo',
