@@ -13,6 +13,7 @@ interface NavbarProps {
   onModeChange: (mode: UserMode) => void;
   onBossMode: () => void;
   onAuthClick: () => void;
+  onProfileClick?: () => void;
   onSearch: (query: string) => void;
 }
 
@@ -32,6 +33,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onModeChange,
   onBossMode,
   onAuthClick,
+  onProfileClick,
   onSearch
 }) => {
   const { t, lang, setLang } = useLanguage();
@@ -202,7 +204,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* AUTH BUTTON */}
         <button 
-          onClick={user ? logout : onAuthClick}
+          onClick={user ? (onProfileClick || (() => {})) : onAuthClick}
           className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition border ${user ? 'bg-brand-gold/10 text-brand-gold border-brand-gold/30 hover:bg-brand-gold/20' : 'bg-white/5 text-white border-white/10 hover:bg-white/10'}`}
         >
            <Icon name="User" size={16} />

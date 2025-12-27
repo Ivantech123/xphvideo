@@ -77,7 +77,12 @@ export const TubeAdapter = {
       const wrapper = await response.json();
       const data: EpornerResponse = JSON.parse(wrapper.contents);
       
-      return data.videos.map(ev => ({
+      return data.videos.map(ev => {
+        // Extract first keyword as pseudo-author name for variety
+        const keywords = ev.keywords?.split(',').map(k => k.trim()).filter(k => k.length > 0) || [];
+        const pseudoAuthor = keywords[0] || 'Eporner';
+        
+        return {
         id: `ep_${ev.id}`,
         title: ev.title,
         description: ev.keywords, 
@@ -86,10 +91,10 @@ export const TubeAdapter = {
         embedUrl: ev.embed.match(/src="([^"]+)"/)?.[1] || '', 
         duration: ev.length_sec,
         creator: {
-          id: 'eporner',
-          name: 'Eporner Network',
+          id: `ep_${pseudoAuthor.replace(/\s+/g, '_')}`,
+          name: pseudoAuthor,
           avatar: 'https://www.eporner.com/favicon.ico',
-          verified: true,
+          verified: false,
           tier: 'Standard'
         },
         tags: ev.keywords.split(',').map((tag, idx) => ({ id: `tag_${idx}`, label: tag.trim() })),
@@ -97,7 +102,8 @@ export const TubeAdapter = {
         rating: parseFloat(ev.rate) || 0, // Eporner rate is usually percentage string "95.5"
         quality: 'HD', 
         source: 'Eporner'
-      }));
+      };
+      });
 
     } catch (error) {
       console.error("Failed to fetch from Eporner:", error);

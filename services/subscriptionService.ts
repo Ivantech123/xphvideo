@@ -48,17 +48,9 @@ export const SubscriptionService = {
       .from('subscriptions')
       .delete()
       .eq('user_id', user.id)
-      .eq('creator_id: text', creatorId); // Explicit type cast might be needed sometimes, but usually simple eq works. Let's try simple eq first.
-      
-    // Re-trying simple eq if the above comment was just a thought.
-    // Actually, let's stick to standard eq.
-    const { error: deleteError } = await supabase
-        .from('subscriptions')
-        .delete()
-        .eq('user_id', user.id)
-        .eq('creator_id', creatorId);
+      .eq('creator_id', creatorId);
 
-    return { error: deleteError ? deleteError.message : null };
+    return { error: error ? error.message : null };
   },
 
   async getSubscriptions(): Promise<Subscription[]> {

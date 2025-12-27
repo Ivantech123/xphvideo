@@ -47,41 +47,32 @@ export const VideoService = {
           query = RecommendationService.getPersonalizedQuery();
         }
         
-        const fetchPromises = [];
-
-        if (source === 'All' || source === 'Eporner') {
-            fetchPromises.push(TubeAdapter.fetchEporner(query, 24, page));
-        }
-        if (source === 'All' || source === 'Pornhub') {
-            fetchPromises.push(TubeAdapter.fetchPornhub(query, page));
-        }
-        if (source === 'All' || source === 'XVideos') {
-            fetchPromises.push(TubeAdapter.fetchXVideos(query, page));
-        }
-        
-        const results = await Promise.all(fetchPromises);
-        
-        // Flatten results
-        const allFetched = results.flat();
-        
-        // Interleave if multiple sources
+        // Prioritize Pornhub (fastest) for quick first paint
         if (source === 'All') {
-             // Extract back if All - interleave and shuffle for variety
-             const ep = results[0] || [];
-             const ph = results[1] || [];
-             const xv = results[2] || [];
-             
-             const maxLength = Math.max(ep.length, ph.length, xv.length);
-             for (let i = 0; i < maxLength; i++) {
-                if (ph[i]) videos.push(ph[i]);
-                if (ep[i]) videos.push(ep[i]);
-                if (xv[i]) videos.push(xv[i]);
-             }
-             
-             // Sort by recommendation score for personalized feed
-             videos = RecommendationService.sortByRecommendation(videos);
+            // Load Pornhub first for fast initial render
+            const phVideos = await TubeAdapter.fetchPornhub(query, page);
+            videos = [...phVideos];
+            
+            // Then load other sources in parallel (non-blocking for UI)
+            Promise.all([
+                TubeAdapter.fetchEporner(query, 24, page),
+                TubeAdapter.fetchXVideos(query, page)
+            ]).then(([ep, xv]) => {
+                // These will be available for next render/scroll
+                console.log(`[VideoService] Background loaded: ${ep.length} Eporner, ${xv.length} XVideos`);
+            }).catch(() => {});
+            
+            // Sort by recommendation score
+            videos = RecommendationService.sortByRecommendation(videos);
         } else {
-            videos = allFetched;
+            // Single source - fetch directly
+            if (source === 'Pornhub') {
+                videos = await TubeAdapter.fetchPornhub(query, page);
+            } else if (source === 'Eporner') {
+                videos = await TubeAdapter.fetchEporner(query, 24, page);
+            } else if (source === 'XVideos') {
+                videos = await TubeAdapter.fetchXVideos(query, page);
+            }
         }
         
     } catch (e) {

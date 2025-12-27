@@ -17,6 +17,7 @@ import { GeoBlock } from './components/GeoBlock';
 import { AuthProvider } from './contexts/AuthContext';
 import { AuthModal } from './components/AuthModal';
 import { ProfileView } from './components/ProfileView';
+import { UserProfile } from './components/UserProfile';
 
 // --- NEW PAGES (Internal Components for cleaner file) ---
 
@@ -333,6 +334,7 @@ const VelvetApp = () => {
   const [isBossMode, setIsBossMode] = useState(false);
   const [isLegalOpen, setIsLegalOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
   
@@ -429,6 +431,7 @@ const VelvetApp = () => {
           
           {isLegalOpen && <LegalModal onClose={() => setIsLegalOpen(false)} />}
           {isAuthOpen && <AuthModal onClose={() => setIsAuthOpen(false)} />}
+          {isProfileOpen && <UserProfile onClose={() => setIsProfileOpen(false)} onVideoClick={(v) => { setCurrentVideo(v); setIsProfileOpen(false); }} />}
 
           <div className={`transition-opacity duration-500 ${!isVerified ? 'opacity-0 h-0 overflow-hidden' : 'opacity-100'}`}>
              <Navbar 
@@ -439,6 +442,7 @@ const VelvetApp = () => {
                 onModeChange={setUserMode}
                 onBossMode={() => setIsBossMode(true)}
                 onAuthClick={() => setIsAuthOpen(true)}
+                onProfileClick={() => setIsProfileOpen(true)}
                 onSearch={setSearchQuery}
              />
              
