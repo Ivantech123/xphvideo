@@ -1,12 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, AuthService } from '../services/authService';
 import { supabase } from '../services/supabase';
-import { initNetlifyIdentity, getCurrentUser as getNetlifyUser, onAuthStateChange as onNetlifyAuthChange, openLogin as netlifyLogin, logout as netlifyLogout, NetlifyUser } from '../services/netlifyIdentity';
 
 console.log('[AuthContext] Module loaded, supabase:', supabase ? 'initialized' : 'null');
-
-// Check if running on velvet.run (use Netlify Identity) or localhost (use Supabase)
-const useNetlifyAuth = typeof window !== 'undefined' && window.location.hostname.includes('velvet.run');
 
 interface AuthContextType {
   user: User | null;
@@ -25,60 +21,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (useNetlifyAuth) {
-      // Use Netlify Identity for velvet.run
-      initNetlifyIdentity().then(() => {
-        const netlifyUser = getNetlifyUser();
-        if (netlifyUser) {
-          const u: User = { id: netlifyUser.id, email: netlifyUser.email };
-          setUser(u);
-          if (u.email === 'abloko362@gmail.com') setIsAdmin(true);
-        }
-        setLoading(false);
-      });
+    // Use Supabase auth
+    AuthService.getCurrentUser().then(u => {
+      setUser(u);
+      if (u && u.email === 'abloko362@gmail.com') setIsAdmin(true);
+      else setIsAdmin(false);
+      setLoading(false);
+    });
 
-      onNetlifyAuthChange((netlifyUser: NetlifyUser | null) => {
-        if (netlifyUser) {
-          const u: User = { id: netlifyUser.id, email: netlifyUser.email };
-          setUser(u);
-          if (u.email === 'abloko362@gmail.com') setIsAdmin(true);
-          else setIsAdmin(false);
-        } else {
-          setUser(null);
-          setIsAdmin(false);
-        }
-      });
-    } else {
-      // Use Supabase for localhost/other domains
-      AuthService.getCurrentUser().then(u => {
+    if (supabase) {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        const u = session?.user ? { id: session.user.id, email: session.user.email || '' } : null;
         setUser(u);
         if (u && u.email === 'abloko362@gmail.com') setIsAdmin(true);
         else setIsAdmin(false);
         setLoading(false);
       });
 
-      if (supabase) {
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-          const u = session?.user ? { id: session.user.id, email: session.user.email || '' } : null;
-          setUser(u);
-          if (u && u.email === 'abloko362@gmail.com') setIsAdmin(true);
-          else setIsAdmin(false);
-          setLoading(false);
-        });
-
-        return () => subscription.unsubscribe();
-      } else {
-          setLoading(false);
-      }
+      return () => subscription.unsubscribe();
+    } else {
+        setLoading(false);
     }
   }, []);
 
   const login = async (email: string, pass: string) => {
-    if (useNetlifyAuth) {
-      // Open Netlify Identity modal
-      netlifyLogin();
-      return null;
-    }
     const { user, error } = await AuthService.signIn(email, pass);
     if (user) {
        setUser(user);
@@ -88,11 +54,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const register = async (email: string, pass: string) => {
-    if (useNetlifyAuth) {
-      // Open Netlify Identity modal (signup tab)
-      netlifyLogin();
-      return null;
-    }
     const { user, error } = await AuthService.signUp(email, pass);
     if (user) {
        setUser(user);
@@ -102,11 +63,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
-    if (useNetlifyAuth) {
-      netlifyLogout();
-    } else {
-      await AuthService.signOut();
-    }
+    await AuthService.signOut();
     setUser(null);
     setIsAdmin(false);
   };
