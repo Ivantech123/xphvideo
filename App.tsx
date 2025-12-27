@@ -257,7 +257,20 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, onCreatorClick, userMo
               <span className="text-brand-gold">●</span> {t('recommended')}
             </h2>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-8">
+            {/* Skeleton loading state */}
+            {loading && videos.length === 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-8">
+                {[...Array(8)].map((_, i) => (
+                  <div key={i} className="animate-pulse">
+                    <div className="aspect-video bg-white/10 rounded-lg mb-3"></div>
+                    <div className="h-4 bg-white/10 rounded w-3/4 mb-2"></div>
+                    <div className="h-3 bg-white/5 rounded w-1/2"></div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-8 ${loading && videos.length === 0 ? 'hidden' : ''}`}>
               {videos.map(video => <VideoCard key={video.id} video={video} onClick={() => onVideoClick(video)} onCreatorClick={onCreatorClick} />)}
             </div>
 
