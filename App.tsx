@@ -17,6 +17,7 @@ import { GuidedSessionOverlay } from './components/GuidedSessionOverlay';
 import { BodyRatings } from './components/BodyRatings';
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
 import { VideoService } from './services/videoService';
+import { GeoBlock } from './components/GeoBlock';
 
 // --- NEW PAGES (Internal Components for cleaner file) ---
 
@@ -70,6 +71,7 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, userMode, currentView,
   const [videos, setVideos] = useState<Video[]>([]);
   const [creators, setCreators] = useState<Creator[]>([]);
   const [collections, setCollections] = useState<Collection[]>(STATIC_COLLECTIONS);
+  const [loading, setLoading] = useState(true);
   
   // Dynamic Category List
   const getCategories = () => {
@@ -89,23 +91,28 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, userMode, currentView,
   useEffect(() => {
     setActiveCategory(currentCategories[0]);
     const loadData = async () => {
-      // 1. Fetch Videos
-      const vids = await VideoService.getVideos(userMode, activeCategory);
-      
-      // 2. Filter by View Type (History/Favs)
-      if (currentView === 'favorites') {
-        setVideos(VideoService.getFavorites());
-      } else if (currentView === 'history') {
-        setVideos(VideoService.getHistory());
-      } else {
-        // Normal Home / Category View
-        setVideos(vids);
-      }
+      setLoading(true);
+      try {
+        // 1. Fetch Videos
+        const vids = await VideoService.getVideos(userMode, activeCategory);
+        
+        // 2. Filter by View Type (History/Favs)
+        if (currentView === 'favorites') {
+          setVideos(VideoService.getFavorites());
+        } else if (currentView === 'history') {
+          setVideos(VideoService.getHistory());
+        } else {
+          // Normal Home / Category View
+          setVideos(vids);
+        }
 
-      // 3. Fetch Creators
-      if (currentView === 'models') {
-        const c = await VideoService.getCreators();
-        setCreators(c);
+        // 3. Fetch Creators
+        if (currentView === 'models') {
+          const c = await VideoService.getCreators();
+          setCreators(c);
+        }
+      } finally {
+        setLoading(false);
       }
     };
     loadData();
@@ -201,9 +208,15 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, userMode, currentView,
             <h2 className="text-2xl font-serif font-bold text-white mb-6 flex items-center gap-2">
               <span className="text-brand-gold">●</span> {aiMood ? t('curated') : t('recommended')}
             </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-8">
-              {videos.map(video => <VideoCard key={video.id} video={video} onClick={() => onVideoClick(video)} />)}
-            </div>
+            {loading ? (
+               <div className="flex items-center justify-center h-64 text-brand-gold">
+                 <Icon name="Loader2" size={48} className="animate-spin" />
+               </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-8">
+                {videos.map(video => <VideoCard key={video.id} video={video} onClick={() => onVideoClick(video)} />)}
+              </div>
+            )}
           </section>
           
           {!aiMood && userMode === 'General' && collections.map(collection => (
@@ -286,6 +299,7 @@ export default function App() {
 
   return (
     <LanguageProvider>
+      <GeoBlock>
       <Router>
         <div className={`min-h-screen text-gray-200 font-sans selection:bg-brand-gold selection:text-black transition-colors duration-500 bg-brand-bg bg-grain`}>
           <BossMode isActive={isBossMode} onExit={() => setIsBossMode(false)} />
@@ -332,6 +346,7 @@ export default function App() {
           </div>
         </div>
       </Router>
+      </GeoBlock>
     </LanguageProvider>
   );
 }

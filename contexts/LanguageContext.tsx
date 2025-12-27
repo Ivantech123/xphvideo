@@ -192,6 +192,10 @@ const DICTIONARY = {
     gso_wait: 'WAIT',
     gso_calculating: '...',
     
+    // Geo Block
+    access_denied: 'Доступ Запрещен',
+    geo_restricted: 'Сервис недоступен в вашем регионе.',
+    
     // Kinks
     kink_praise: 'Похвала',
     kink_humiliation: 'Унижение',
@@ -446,6 +450,10 @@ const DICTIONARY = {
     gso_start: 'START',
     gso_wait: 'WAIT',
     gso_calculating: '...',
+
+    // Geo Block
+    access_denied: 'Access Denied',
+    geo_restricted: 'This service is not available in your region.',
 
     // Kinks
     kink_praise: 'Praise',
