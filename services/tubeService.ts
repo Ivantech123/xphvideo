@@ -225,13 +225,7 @@ export const TubeAdapter = {
            videoUrl: '', 
            embedUrl: embedUrl,
            duration: duration,
-           creator: {
-             id: 'xv_net',
-             name: 'XVideos',
-             avatar: 'https://www.xvideos.com/favicon.ico',
-             verified: false,
-             tier: 'Standard'
-           },
+           creator: undefined, // No profile for XVideos
            tags: [{ id: 'xv_tag', label: 'XVideos' }],
            views: 0, 
            rating: 0,

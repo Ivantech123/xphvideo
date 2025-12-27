@@ -3,6 +3,16 @@ import { MOCK_VIDEOS, CREATORS } from '../constants';
 import { TubeAdapter } from './tubeService';
 import { CATEGORY_MAP } from './categoryMap';
 
+// Fisher-Yates shuffle for randomizing videos
+function shuffleArray<T>(array: T[]): T[] {
+  const arr = [...array];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
 // --- API SIMULATION & PARSING LOGIC ---
 
 /**
@@ -52,16 +62,7 @@ export const VideoService = {
         
         // Interleave if multiple sources
         if (source === 'All') {
-             // Basic interleaving is hard with variable array lengths from flat(). 
-             // Let's just shuffle or leave flat?
-             // The previous logic assumed 3 specific arrays.
-             // We can assume order: Eporner, Pornhub, XVideos in results if pushed in order.
-             // But simpler to just use what we have.
-             // Let's rely on basic flat for now, but shuffle might be better for variety?
-             // Actually, the previous interleaving logic was better for "All".
-             // Let's restore interleaving if All.
-             
-             // Extract back if All
+             // Extract back if All - interleave and shuffle for variety
              const ep = results[0] || [];
              const ph = results[1] || [];
              const xv = results[2] || [];
@@ -72,6 +73,9 @@ export const VideoService = {
                 if (ep[i]) videos.push(ep[i]);
                 if (xv[i]) videos.push(xv[i]);
              }
+             
+             // Shuffle videos for variety on main page
+             videos = shuffleArray(videos);
         } else {
             videos = allFetched;
         }

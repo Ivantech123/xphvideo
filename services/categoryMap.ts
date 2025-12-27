@@ -3,6 +3,10 @@ export const CATEGORY_MAP: Record<string, string> = {
   // General
   'Все видео': '',
   'All': '',
+  'В тренде': 'trending',
+  'Trending': 'trending',
+  'Новое': 'new',
+  'New': 'new',
   'Premium': 'premium',
   'Любительское': 'amateur',
   'POV': 'pov',

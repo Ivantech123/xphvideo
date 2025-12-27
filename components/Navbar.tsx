@@ -157,7 +157,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       </div>
 
       {/* Center: Desktop Search */}
-      <div className="hidden md:flex flex-1 max-w-xl mx-8">
+      <div className="hidden md:flex flex-1 max-w-xl mx-8" ref={searchRef}>
         <div className="flex w-full relative group">
           <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
             <Icon name="Search" size={16} className="text-gray-500 group-focus-within:text-brand-gold transition-colors" />
@@ -169,7 +169,23 @@ export const Navbar: React.FC<NavbarProps> = ({
             value={searchValue}
             onChange={(e) => setSearchValue(e.target.value)}
             onKeyDown={handleSearch}
+            onFocus={() => searchValue.length > 1 && setShowSuggestions(true)}
           />
+          {/* Search Suggestions Dropdown */}
+          {showSuggestions && suggestions.length > 0 && (
+            <div className="absolute top-full left-0 right-0 mt-1 bg-[#1a1a1a] border border-white/10 rounded-lg shadow-2xl z-50 max-h-64 overflow-y-auto">
+              {suggestions.map((s, i) => (
+                <button
+                  key={i}
+                  onClick={() => handleSuggestionClick(s)}
+                  className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-white/10 hover:text-white transition flex items-center gap-2"
+                >
+                  <Icon name="Search" size={14} className="text-gray-500" />
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
