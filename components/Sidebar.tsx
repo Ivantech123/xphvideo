@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Icon } from './Icon';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
+import { SubscriptionService, Subscription } from '../services/subscriptionService';
 
 type ViewType = 'home' | 'models' | 'categories' | 'favorites' | 'history' | 'admin';
 
@@ -14,8 +15,17 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentView, onChangeView, onOpenLegal }) => {
   const { t } = useLanguage();
-  const { isAdmin } = useAuth();
+  const { user, isAdmin } = useAuth();
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   
+  useEffect(() => {
+    if (user) {
+      SubscriptionService.getSubscriptions().then(setSubscriptions);
+    } else {
+      setSubscriptions([]);
+    }
+  }, [user, isOpen]); // Refresh when sidebar opens or user changes
+
   const sidebarClass = isOpen 
     ? "w-60 translate-x-0" 
     : "w-0 -translate-x-full md:w-20 md:translate-x-0";
@@ -37,8 +47,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentView, onChangeV
   if (isAdmin) {
     SECONDARY_ITEMS.push({ id: 'admin', icon: 'Shield', label: t('admin') });
   }
-
-  const SUBSCRIPTIONS = ['Sweet Fox', 'Elena Visuals', 'Noir Collective', 'Eva Life'];
 
   return (
     <aside className={`fixed left-0 top-16 bottom-0 bg-brand-bg z-40 overflow-y-auto transition-all duration-300 border-r border-brand-border ${sidebarClass} scrollbar-hide`}>
@@ -93,16 +101,22 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentView, onChangeV
         <div className="h-px bg-brand-border mx-3 my-2" />
 
         {/* Subscriptions */}
-        {isOpen && (
+        {isOpen && user && (
           <div className="px-4 py-2">
              <h3 className="text-xs font-bold text-gray-500 uppercase mb-3 tracking-wider">{t('subscriptions')}</h3>
              <div className="space-y-3">
-                {SUBSCRIPTIONS.map(sub => (
-                  <div key={sub} className="flex items-center gap-3 cursor-pointer hover:text-white text-gray-400 group">
-                    <div className="w-6 h-6 rounded-full bg-gray-700 border border-transparent group-hover:border-brand-gold transition-colors" />
-                    <span className="text-sm truncate">{sub}</span>
+                {subscriptions.length > 0 ? subscriptions.map(sub => (
+                  <div key={sub.id} className="flex items-center gap-3 cursor-pointer hover:text-white text-gray-400 group">
+                    {sub.creator_avatar ? (
+                      <img src={sub.creator_avatar} className="w-6 h-6 rounded-full object-cover border border-transparent group-hover:border-brand-gold transition-colors" />
+                    ) : (
+                      <div className="w-6 h-6 rounded-full bg-gray-700 border border-transparent group-hover:border-brand-gold transition-colors" />
+                    )}
+                    <span className="text-sm truncate">{sub.creator_name}</span>
                   </div>
-                ))}
+                )) : (
+                  <div className="text-xs text-gray-600 italic">No subscriptions yet</div>
+                )}
              </div>
           </div>
         )}

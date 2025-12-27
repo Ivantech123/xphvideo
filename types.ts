@@ -4,6 +4,10 @@ export interface Creator {
   avatar: string;
   verified: boolean;
   tier: 'Standard' | 'Premium' | 'Exclusive';
+  stats?: {
+    videos: number;
+    views: number;
+  };
 }
 
 export interface Tag {

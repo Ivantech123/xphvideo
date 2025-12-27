@@ -4,7 +4,9 @@ import { Icon } from './Icon';
 import { AdUnit } from './AdUnit';
 import { VideoCard } from './VideoCard';
 import { VideoService } from '../services/videoService';
+import { SubscriptionService } from '../services/subscriptionService';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useAuth } from '../contexts/AuthContext';
 
 interface VideoPlayerProps {
   video: Video;
@@ -14,14 +16,19 @@ interface VideoPlayerProps {
 
 export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose, onVideoChange }) => {
   const { t } = useLanguage();
+  const { user } = useAuth();
   const [isBlurred, setIsBlurred] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
+  const [isSubscribed, setIsSubscribed] = useState(false);
   const [relatedVideos, setRelatedVideos] = useState<Video[]>([]);
 
   useEffect(() => {
     setIsFavorite(VideoService.isFavorite(video.id));
+    if (user) {
+        SubscriptionService.isSubscribed(video.creator.id).then(setIsSubscribed);
+    }
     
     // Fetch related videos based on tags or title
     const loadRelated = async () => {
@@ -30,11 +37,25 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose, onVide
        setRelatedVideos(vids.slice(0, 6));
     };
     loadRelated();
-  }, [video]);
+  }, [video, user]);
 
   const toggleFav = () => {
     const newVal = VideoService.toggleFavorite(video);
     setIsFavorite(newVal);
+  };
+
+  const toggleSubscribe = async () => {
+    if (!user) {
+        // Maybe prompt login, but for now just ignore or show toast
+        return;
+    }
+    if (isSubscribed) {
+        await SubscriptionService.unsubscribe(video.creator.id);
+        setIsSubscribed(false);
+    } else {
+        await SubscriptionService.subscribe(video.creator.id, video.creator.name, video.creator.avatar);
+        setIsSubscribed(true);
+    }
   };
 
   useEffect(() => {
@@ -157,7 +178,12 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose, onVide
                     <span className="text-xs text-gray-500">120K Subscribers</span>
                   </div>
                </div>
-               <button className="bg-brand-accent hover:bg-red-600 text-white px-6 py-2 rounded-full text-sm font-bold uppercase tracking-wide shadow-lg shadow-red-900/20 transition transform hover:scale-105">{t('subscribe')}</button>
+               <button 
+                 onClick={toggleSubscribe}
+                 className={`${isSubscribed ? 'bg-gray-600 hover:bg-gray-500' : 'bg-brand-accent hover:bg-red-600'} text-white px-6 py-2 rounded-full text-sm font-bold uppercase tracking-wide shadow-lg shadow-red-900/20 transition transform hover:scale-105`}
+               >
+                 {isSubscribed ? t('subscribed') : t('subscribe')}
+               </button>
             </div>
 
             <div className={`bg-brand-surface/50 p-4 rounded-xl text-sm text-gray-300 mt-4 transition-all duration-300 ${isBlurred ? 'blur-md select-none opacity-50' : ''}`}>
