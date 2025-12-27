@@ -16,11 +16,36 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose }) => {
   const [emailSent, setEmailSent] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [resetEmailSent, setResetEmailSent] = useState(false);
+  const [useMagicLink, setUseMagicLink] = useState(false);
+  const [magicLinkSent, setMagicLinkSent] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
+
+    if (useMagicLink) {
+      try {
+        const { supabase } = await import('../services/supabase');
+        if (supabase) {
+          const { error } = await supabase.auth.signInWithOtp({
+            email,
+            options: {
+              emailRedirectTo: window.location.origin,
+            },
+          });
+          if (error) {
+            setError(error.message);
+          } else {
+            setMagicLinkSent(true);
+          }
+        }
+      } catch (err) {
+        setError('Ошибка отправки Magic Link');
+      }
+      setLoading(false);
+      return;
+    }
 
     const res = isLogin 
       ? await login(email, password)
@@ -67,6 +92,33 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose }) => {
     }
     setLoading(false);
   };
+
+  // Magic Link sent screen
+  if (magicLinkSent) {
+    return (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm animate-fade-in p-4">
+        <div className="bg-brand-surface w-full max-w-md border border-white/10 rounded-2xl p-8 shadow-2xl relative overflow-hidden text-center">
+          <div className="w-20 h-20 bg-purple-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Icon name="Sparkles" size={40} className="text-purple-400" />
+          </div>
+          <h2 className="text-2xl font-black text-white mb-3">Magic Link отправлен!</h2>
+          <p className="text-gray-400 mb-2">
+            Мы отправили ссылку для входа на:
+          </p>
+          <p className="text-brand-gold font-bold text-lg mb-6">{email}</p>
+          <p className="text-gray-500 text-sm mb-6">
+            Перейдите по ссылке в письме, чтобы войти в аккаунт без пароля.
+          </p>
+          <button 
+            onClick={onClose}
+            className="w-full bg-brand-gold hover:bg-yellow-500 text-black font-bold py-3 rounded-lg uppercase tracking-widest transition"
+          >
+            Понятно
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // Password reset email sent screen
   if (resetEmailSent) {
@@ -209,34 +261,56 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose }) => {
              />
            </div>
            
-           <div>
-             <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">Password</label>
-             <input 
-               type="password" 
-               required
-               value={password}
-               onChange={(e) => setPassword(e.target.value)}
-               className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white focus:border-brand-gold outline-none transition"
-               placeholder="••••••••"
-             />
-           </div>
+           {!useMagicLink && (
+             <div>
+               <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">Password</label>
+               <input 
+                 type="password" 
+                 required={!useMagicLink}
+                 value={password}
+                 onChange={(e) => setPassword(e.target.value)}
+                 className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white focus:border-brand-gold outline-none transition"
+                 placeholder="••••••••"
+               />
+             </div>
+           )}
 
            <button 
              type="submit" 
              disabled={loading}
              className="w-full bg-brand-gold hover:bg-yellow-500 text-black font-bold py-3 rounded-lg uppercase tracking-widest transition disabled:opacity-50"
            >
-             {loading ? 'Processing...' : (isLogin ? 'Log In' : 'Create Account')}
+             {loading ? 'Processing...' : (useMagicLink ? 'Отправить Magic Link' : (isLogin ? 'Log In' : 'Create Account'))}
            </button>
 
-           {isLogin && (
-             <button 
-               type="button"
-               onClick={() => setShowForgotPassword(true)}
-               className="w-full text-center text-sm text-gray-500 hover:text-brand-gold transition mt-2"
-             >
-               Забыли пароль?
-             </button>
+           {isLogin && !useMagicLink && (
+             <div className="flex flex-col gap-2 mt-2">
+                <button 
+                  type="button"
+                  onClick={() => setUseMagicLink(true)}
+                  className="w-full text-center text-sm text-brand-gold hover:text-white transition border border-brand-gold/30 rounded py-2 hover:bg-brand-gold/10"
+                >
+                  <Icon name="Sparkles" size={14} className="inline mr-1" />
+                  Войти без пароля (Magic Link)
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => setShowForgotPassword(true)}
+                  className="w-full text-center text-sm text-gray-500 hover:text-brand-gold transition"
+                >
+                  Забыли пароль?
+                </button>
+             </div>
+           )}
+
+           {isLogin && useMagicLink && (
+              <button 
+                type="button"
+                onClick={() => setUseMagicLink(false)}
+                className="w-full text-center text-sm text-gray-500 hover:text-white transition mt-2"
+              >
+                Войти с паролем
+              </button>
            )}
         </form>
 

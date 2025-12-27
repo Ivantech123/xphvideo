@@ -71,7 +71,45 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentView, onChangeV
           {MENU_ITEMS.map((item) => (
             <button 
               key={item.id} 
-              onClick={() => onChangeView('home')} // For now, trending/new link to home w/ sort (mock)
+              onClick={() => {
+                // Map menu items to views/categories
+                if (item.id === 'home') {
+                    onChangeView('home');
+                } else if (item.id === 'trending') {
+                    onChangeView('home');
+                    // We need a way to trigger category change from here. 
+                    // Ideally pass a onCategorySelect prop, but for now let's rely on App handling via URL or simple view change.
+                    // Actually, App.tsx doesn't listen to Sidebar for category changes directly yet.
+                    // Let's assume 'home' view will show default. 
+                    // To fix this properly, we might need to pass a callback or dispatch an event.
+                    // For now, let's just emit a custom event that App.tsx can listen to, or simpler: use URL params if possible.
+                    // But Sidebar only has onChangeView.
+                    // Let's modify the onChangeView to accept params or handle it in App.tsx.
+                    // Given the constraints, let's try dispatching a custom event which App.tsx likely listens to? No.
+                    
+                    // Workaround: We will use window.location.hash or search params to trigger the filter.
+                    const url = new URL(window.location.href);
+                    if (item.id === 'trending') url.searchParams.set('q', 'trending');
+                    if (item.id === 'new') url.searchParams.set('q', 'new');
+                    if (item.id === 'shorts') url.searchParams.set('q', 'shorts');
+                    window.history.pushState({}, '', url);
+                    
+                    // Dispatch a popstate event so App can detect if it listens (it uses useSearchParams)
+                    window.dispatchEvent(new PopStateEvent('popstate'));
+                } else if (item.id === 'new') {
+                    onChangeView('home');
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('q', 'new');
+                    window.history.pushState({}, '', url);
+                    window.dispatchEvent(new PopStateEvent('popstate'));
+                } else if (item.id === 'shorts') {
+                    onChangeView('home');
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('q', 'shorts');
+                    window.history.pushState({}, '', url);
+                    window.dispatchEvent(new PopStateEvent('popstate'));
+                }
+              }} 
               className={`w-full flex items-center gap-4 px-3 py-2.5 rounded-lg hover:bg-brand-surface transition ${currentView === 'home' && item.id === 'home' ? 'bg-brand-surface text-white' : 'text-gray-400'}`}
             >
               <Icon name={item.icon as any} size={22} className={currentView === 'home' && item.id === 'home' ? 'text-white' : 'text-gray-400'} />

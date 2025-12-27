@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { SubscriptionService, Subscription } from '../services/subscriptionService';
 import { VideoService } from '../services/videoService';
 import { Video } from '../types';
+import { supabase } from '../services/supabase';
 
 interface UserProfileProps {
   onClose: () => void;
@@ -12,10 +13,16 @@ interface UserProfileProps {
 
 export const UserProfile: React.FC<UserProfileProps> = ({ onClose, onVideoClick }) => {
   const { user, logout } = useAuth();
-  const [activeTab, setActiveTab] = useState<'favorites' | 'history' | 'subscriptions'>('favorites');
+  const [activeTab, setActiveTab] = useState<'favorites' | 'history' | 'subscriptions' | 'settings'>('favorites');
   const [favorites, setFavorites] = useState<Video[]>([]);
   const [history, setHistory] = useState<Video[]>([]);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+  
+  // Settings state
+  const [newEmail, setNewEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [settingsMessage, setSettingsMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     // Load user data
@@ -27,6 +34,42 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onClose, onVideoClick 
   const handleLogout = async () => {
     await logout();
     onClose();
+  };
+
+  const handleUpdateEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newEmail) return;
+    setLoading(true);
+    setSettingsMessage(null);
+
+    if (supabase) {
+        const { error } = await supabase.auth.updateUser({ email: newEmail });
+        if (error) {
+            setSettingsMessage({ type: 'error', text: error.message });
+        } else {
+            setSettingsMessage({ type: 'success', text: 'Проверьте новую почту для подтверждения смены.' });
+            setNewEmail('');
+        }
+    }
+    setLoading(false);
+  };
+
+  const handleUpdatePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPassword) return;
+    setLoading(true);
+    setSettingsMessage(null);
+
+    if (supabase) {
+        const { error } = await supabase.auth.updateUser({ password: newPassword });
+        if (error) {
+            setSettingsMessage({ type: 'error', text: error.message });
+        } else {
+            setSettingsMessage({ type: 'success', text: 'Пароль успешно обновлен.' });
+            setNewPassword('');
+        }
+    }
+    setLoading(false);
   };
 
   const clearHistory = () => {
@@ -61,27 +104,34 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onClose, onVideoClick 
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-white/10">
+        <div className="flex border-b border-white/10 overflow-x-auto">
           <button 
             onClick={() => setActiveTab('favorites')}
-            className={`flex-1 py-3 text-sm font-bold uppercase tracking-wider transition ${activeTab === 'favorites' ? 'text-brand-gold border-b-2 border-brand-gold' : 'text-gray-500 hover:text-white'}`}
+            className={`flex-1 min-w-[100px] py-3 text-sm font-bold uppercase tracking-wider transition ${activeTab === 'favorites' ? 'text-brand-gold border-b-2 border-brand-gold' : 'text-gray-500 hover:text-white'}`}
           >
             <Icon name="Heart" size={16} className="inline mr-2" />
-            Избранное ({favorites.length})
+            Избранное
           </button>
           <button 
             onClick={() => setActiveTab('history')}
-            className={`flex-1 py-3 text-sm font-bold uppercase tracking-wider transition ${activeTab === 'history' ? 'text-brand-gold border-b-2 border-brand-gold' : 'text-gray-500 hover:text-white'}`}
+            className={`flex-1 min-w-[100px] py-3 text-sm font-bold uppercase tracking-wider transition ${activeTab === 'history' ? 'text-brand-gold border-b-2 border-brand-gold' : 'text-gray-500 hover:text-white'}`}
           >
             <Icon name="Clock" size={16} className="inline mr-2" />
-            История ({history.length})
+            История
           </button>
           <button 
             onClick={() => setActiveTab('subscriptions')}
-            className={`flex-1 py-3 text-sm font-bold uppercase tracking-wider transition ${activeTab === 'subscriptions' ? 'text-brand-gold border-b-2 border-brand-gold' : 'text-gray-500 hover:text-white'}`}
+            className={`flex-1 min-w-[100px] py-3 text-sm font-bold uppercase tracking-wider transition ${activeTab === 'subscriptions' ? 'text-brand-gold border-b-2 border-brand-gold' : 'text-gray-500 hover:text-white'}`}
           >
             <Icon name="Users" size={16} className="inline mr-2" />
-            Подписки ({subscriptions.length})
+            Подписки
+          </button>
+          <button 
+            onClick={() => setActiveTab('settings')}
+            className={`flex-1 min-w-[100px] py-3 text-sm font-bold uppercase tracking-wider transition ${activeTab === 'settings' ? 'text-brand-gold border-b-2 border-brand-gold' : 'text-gray-500 hover:text-white'}`}
+          >
+            <Icon name="Settings" size={16} className="inline mr-2" />
+            Настройки
           </button>
         </div>
 
@@ -170,6 +220,64 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onClose, onVideoClick 
                   </div>
                 ))
               )}
+            </div>
+          )}
+
+          {activeTab === 'settings' && (
+            <div className="space-y-8 max-w-md mx-auto py-4">
+              {settingsMessage && (
+                <div className={`p-4 rounded-lg text-sm ${settingsMessage.type === 'success' ? 'bg-green-500/10 text-green-400 border border-green-500/30' : 'bg-red-500/10 text-red-400 border border-red-500/30'}`}>
+                  {settingsMessage.text}
+                </div>
+              )}
+
+              <form onSubmit={handleUpdateEmail} className="space-y-4">
+                <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+                  <Icon name="Mail" size={20} />
+                  Смена Email
+                </h3>
+                <div className="space-y-2">
+                  <input 
+                    type="email" 
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    placeholder="Новый email"
+                    className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white focus:border-brand-gold outline-none transition"
+                  />
+                  <button 
+                    type="submit" 
+                    disabled={loading || !newEmail}
+                    className="px-4 py-2 bg-white/10 hover:bg-brand-gold hover:text-black text-white rounded font-medium transition disabled:opacity-50 text-sm"
+                  >
+                    Обновить Email
+                  </button>
+                </div>
+              </form>
+
+              <div className="border-t border-white/10 pt-8">
+                <form onSubmit={handleUpdatePassword} className="space-y-4">
+                  <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+                    <Icon name="Lock" size={20} />
+                    Смена Пароля
+                  </h3>
+                  <div className="space-y-2">
+                    <input 
+                      type="password" 
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Новый пароль"
+                      className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white focus:border-brand-gold outline-none transition"
+                    />
+                    <button 
+                      type="submit" 
+                      disabled={loading || !newPassword}
+                      className="px-4 py-2 bg-white/10 hover:bg-brand-gold hover:text-black text-white rounded font-medium transition disabled:opacity-50 text-sm"
+                    >
+                      Обновить Пароль
+                    </button>
+                  </div>
+                </form>
+              </div>
             </div>
           )}
         </div>
