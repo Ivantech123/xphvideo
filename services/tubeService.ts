@@ -70,16 +70,25 @@ export const TubeAdapter = {
       if (sort === 'new') order = 'latest';
       if (sort === 'best') order = 'top-monthly'; // or top-alltime
 
-      // Use allorigins proxy which wraps response in JSON
-      const API_URL = `https://www.eporner.com/api/v2_video/search/?query=${encodeURIComponent(query)}&per_page=${limit}&page=${page}&thumbsize=big&order=${order}&json=json`;
-      const PROXY_URL = `https://api.allorigins.win/get?url=${encodeURIComponent(API_URL)}`;
+      // Use direct API call (Eporner has CORS enabled)
+      const API_URL = `https://www.eporner.com/api/v2/video/search/?query=${encodeURIComponent(query)}&per_page=${limit}&page=${page}&thumbsize=big&order=${order}&format=json`;
       
-      const response = await fetch(PROXY_URL);
+      console.log('[TubeAdapter] Eporner URL:', API_URL);
       
-      if (!response.ok) throw new Error('Network response was not ok');
-      
-      const wrapper = await response.json();
-      const data: EpornerResponse = JSON.parse(wrapper.contents);
+      let data: EpornerResponse;
+      try {
+        // Try direct API first
+        const response = await fetch(API_URL);
+        if (!response.ok) throw new Error('Direct API failed');
+        data = await response.json();
+      } catch {
+        // Fallback to corsproxy
+        console.log('[TubeAdapter] Eporner direct failed, trying corsproxy...');
+        const PROXY_URL = `https://corsproxy.io/?${encodeURIComponent(API_URL)}`;
+        const response = await fetch(PROXY_URL);
+        if (!response.ok) throw new Error('Proxy also failed');
+        data = await response.json();
+      }
       
       return data.videos.map(ev => {
         // Extract first keyword as pseudo-author name for variety
@@ -216,17 +225,25 @@ export const TubeAdapter = {
       if (sort === 'best') sortParam = 'rating';
       
       const TARGET_URL = `https://www.xvideos.com/?k=${encodeURIComponent(query)}&p=${page}&sort=${sortParam}`;
-      const PROXY_URL = `https://api.allorigins.win/get?url=${encodeURIComponent(TARGET_URL)}`;
       
-      console.log('[TubeAdapter] XVideos URL:', PROXY_URL);
-      const response = await fetch(PROXY_URL);
-      if (!response.ok) {
-        console.error('[TubeAdapter] XVideos response not ok:', response.status);
-        throw new Error('XVideos fetch failed');
+      console.log('[TubeAdapter] XVideos target URL:', TARGET_URL);
+      
+      let html: string;
+      try {
+        // Try allorigins first
+        const PROXY_URL = `https://api.allorigins.win/get?url=${encodeURIComponent(TARGET_URL)}`;
+        const response = await fetch(PROXY_URL);
+        if (!response.ok) throw new Error('allorigins failed');
+        const wrapper = await response.json();
+        html = wrapper.contents;
+      } catch {
+        // Fallback to corsproxy
+        console.log('[TubeAdapter] XVideos allorigins failed, trying corsproxy...');
+        const PROXY_URL = `https://corsproxy.io/?${encodeURIComponent(TARGET_URL)}`;
+        const response = await fetch(PROXY_URL);
+        if (!response.ok) throw new Error('All proxies failed');
+        html = await response.text();
       }
-      
-      const wrapper = await response.json();
-      const html = wrapper.contents;
       const parser = new DOMParser();
       const doc = parser.parseFromString(html, 'text/html');
       

@@ -100,6 +100,7 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, onCreatorClick, userMo
 
   // Reset page and videos when filter changes
   useEffect(() => {
+    console.log('[MainContent] Filter changed, resetting...', { userMode, activeCategory, searchQuery, activeSource });
     setPage(1);
     setVideos([]);
     setHasMore(true);
@@ -117,11 +118,12 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, onCreatorClick, userMo
     }
 
     const loadData = async () => {
-      console.log(`[MainContent] Loading data page ${page}...`);
+      // Determine what to fetch based on searchQuery (navigation) or activeCategory
+      const query = searchQuery || activeCategory;
+      console.log(`[MainContent] Loading data - page: ${page}, query: "${query}", userMode: ${userMode}`);
       setLoading(true);
       try {
         // 1. Fetch Videos
-        const query = searchQuery || activeCategory;
         const vids = await VideoService.getVideos(userMode, query, page, activeSource);
         
         if (vids.length === 0) setHasMore(false);

@@ -48,8 +48,9 @@ export const VideoService = {
         
         console.log('[VideoService] Query params:', { baseQuery, rawCategory, mappedCategory, query });
 
-        // Detect sort mode from query or category
+        // Detect sort mode and special filters from query
         let sortMode: 'trending' | 'new' | 'best' = 'trending';
+        let filterShorts = false; // Filter for videos under 60 seconds
         
         if (query === 'trending' || query === 'В тренде') {
             sortMode = 'trending';
@@ -57,64 +58,26 @@ export const VideoService = {
         } else if (query === 'new' || query === 'Новое') {
             sortMode = 'new';
             query = '';
-        } else if (query === 'best' || query === 'shorts') { // shorts treated as best/trending for now or specific query
-             // 'shorts' usually implies short duration, but for now we map to best or just search 'shorts'
-             if (query === 'shorts') {
-                 // keep query 'shorts' but maybe sort by trending
-                 sortMode = 'trending';
-             } else {
-                 sortMode = 'best';
-                 query = '';
-             }
+        } else if (query === 'best') {
+            sortMode = 'best';
+            query = '';
+        } else if (query === 'shorts' || query === 'Shorts') {
+            // Shorts = videos under 1 minute
+            filterShorts = true;
+            sortMode = 'trending';
+            query = ''; // Fetch trending, then filter by duration
         }
 
-        // If specific category is selected, we usually want "best" or "trending" for that category
-        // If query is empty, we are fetching general feed
+        // If query is empty, use baseQuery or default
         if (!query && !baseQuery) {
              query = 'popular'; // Default fallback
         }
         
-        console.log('[VideoService] Final query:', query, 'sortMode:', sortMode);
+        const finalQuery = query || baseQuery || 'popular';
+        console.log('[VideoService] Final query:', finalQuery, 'sortMode:', sortMode, 'filterShorts:', filterShorts);
 
-        // Prioritize Pornhub (fastest) for quick first paint
+        // Fetch from all sources in parallel
         if (source === 'All') {
-            // Load Pornhub first for fast initial render
-            const phVideos = await TubeAdapter.fetchPornhub(query || baseQuery || 'popular', page, sortMode);
-            videos = [...phVideos];
-            
-            // Then load other sources in parallel (non-blocking for UI)
-            Promise.all([
-                TubeAdapter.fetchEporner(query || baseQuery || '4k', 24, page, sortMode),
-                TubeAdapter.fetchXVideos(query || baseQuery || 'best', page, sortMode)
-            ]).then(([ep, xv]) => {
-                // These will be available for next render/scroll or state update if we had one
-                // Note: This promise just logs currently. In a real app, we'd need a way to update the state.
-                // Since this function returns a promise, we can't easily "stream" updates unless we use a callback or observable.
-                // For now, we only return what we await. 
-                // TO FIX: We should probably wait for all if we want mixed content, 
-                // OR just return PH and let the user load more pages to get others (but pages might be mixed).
-                // Actually, the previous code was waiting for PH then returning. 
-                // The Promise.all below was detached and useless for the *current* return value.
-                // Let's revert to waiting for all to ensure mix, BUT with a timeout or just PH if fast?
-                // User wanted "Speed up first page load".
-                // If we return just PH, the user only sees PH.
-                // Let's stick to the previous "PH first" strategy but actually wait for others with a timeout?
-                // Or just fetch all in parallel and return. PH is fast enough usually.
-                // The previous edit made it return ONLY PH for "All".
-                console.log(`[VideoService] Background fetch finished: ${ep.length} Eporner, ${xv.length} XVideos`);
-            }).catch(() => {});
-            
-            // Wait for all for better quality? Or stick to speed?
-            // User asked for "Speed up".
-            // If I return only PH, I miss Eporner/XVideos content. 
-            // Let's do this: Fetch PH. Return PH. 
-            // BUT: The "Background loaded" logic was flawed because `videos` is returned immediately.
-            // So the background loaded videos are lost.
-            
-            // Let's fix this: We MUST wait for others if we want to show them.
-            // OR we fetch them all in parallel.
-            
-            const finalQuery = query || baseQuery || 'popular';
             console.log('[VideoService] Fetching from all sources with query:', finalQuery, 'sortMode:', sortMode);
             
             const results = await Promise.all([
@@ -144,12 +107,18 @@ export const VideoService = {
         } else {
             // Single source - fetch directly
             if (source === 'Pornhub') {
-                videos = await TubeAdapter.fetchPornhub(query || baseQuery || 'popular', page, sortMode);
+                videos = await TubeAdapter.fetchPornhub(finalQuery, page, sortMode);
             } else if (source === 'Eporner') {
-                videos = await TubeAdapter.fetchEporner(query || baseQuery || '4k', 24, page, sortMode);
+                videos = await TubeAdapter.fetchEporner(finalQuery, 24, page, sortMode);
             } else if (source === 'XVideos') {
-                videos = await TubeAdapter.fetchXVideos(query || baseQuery || 'best', page, sortMode);
+                videos = await TubeAdapter.fetchXVideos(finalQuery, page, sortMode);
             }
+        }
+        
+        // Filter for shorts (videos under 60 seconds)
+        if (filterShorts) {
+            videos = videos.filter(v => v.duration > 0 && v.duration <= 60);
+            console.log('[VideoService] Filtered shorts, remaining:', videos.length);
         }
         
     } catch (e) {
