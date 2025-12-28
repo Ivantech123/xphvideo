@@ -19,6 +19,8 @@ import { AuthModal } from './components/AuthModal';
 import { ProfileView } from './components/ProfileView';
 import { UserProfile } from './components/UserProfile';
 import { AdUnit } from './components/AdUnit';
+import { ShortsView } from './components/ShortsView';
+import { AdminDashboard } from './components/AdminDashboard';
 
 // --- NEW PAGES (Internal Components for cleaner file) ---
 
