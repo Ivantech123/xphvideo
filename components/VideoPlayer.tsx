@@ -326,14 +326,28 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose, onVide
           <div className="w-full bg-black md:rounded-xl overflow-hidden relative group aspect-video shadow-2xl shadow-black/50">
              {video.embedUrl ? (
                 // External Player (Iframe)
-                <iframe 
-                    src={video.embedUrl} 
-                    className="w-full h-full" 
-                    frameBorder="0" 
-                    allowFullScreen 
-                    allow="autoplay; encrypted-media"
-                    title={video.title}
-                />
+                <>
+                  <iframe 
+                      src={video.embedUrl} 
+                      className="w-full h-full" 
+                      frameBorder="0" 
+                      allowFullScreen 
+                      allow="autoplay; encrypted-media"
+                      title={video.title}
+                  />
+
+                  {isBlurred && (
+                    <div className="absolute inset-0 z-10">
+                      <img
+                        src={video.thumbnail}
+                        alt=""
+                        className="w-full h-full object-cover blur-3xl opacity-60"
+                        draggable={false}
+                      />
+                      <div className="absolute inset-0 bg-black/50" />
+                    </div>
+                  )}
+                </>
              ) : (
                 // Internal Player (Direct Video)
                 <>

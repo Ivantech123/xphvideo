@@ -90,6 +90,7 @@ interface HomeProps {
   const [showAllCategories, setShowAllCategories] = useState(false);
   const requestIdRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
+  const seenIdsRef = useRef<Set<string>>(new Set());
   
   // Dynamic Category List
   const currentCategories = useMemo(() => {
@@ -162,6 +163,16 @@ interface HomeProps {
   useEffect(() => {
     if (currentView !== 'home') return;
 
+    // When query context changes, reset pagination and clear seen-set to avoid repeats
+    setPage(1);
+    setHasMore(true);
+    seenIdsRef.current = new Set();
+  }, [currentView, userMode, searchQuery, activeCategory, activeSource, activeSort, activeDuration]);
+
+  // Load videos for Home view
+  useEffect(() => {
+    if (currentView !== 'home') return;
+
     if (!searchQuery && !currentCategories.includes(activeCategory)) {
       setActiveCategory(currentCategories[0]);
       return;
@@ -192,8 +203,15 @@ interface HomeProps {
           // If catalog isn't ready (RPC missing) or empty results, fallback to legacy fetch.
           if (!error && indexed.length > 0) {
             if (indexed.length < limit) setHasMore(false);
-            if (page === 1) setVideos(indexed);
-            else setVideos((prev) => [...prev, ...indexed]);
+            const filtered = indexed.filter(v => {
+              const id = v.id;
+              if (!id) return false;
+              if (seenIdsRef.current.has(id)) return false;
+              seenIdsRef.current.add(id);
+              return true;
+            });
+            if (page === 1) setVideos(filtered);
+            else setVideos((prev) => [...prev, ...filtered]);
             return;
           }
         } catch {
@@ -205,8 +223,15 @@ interface HomeProps {
         const vids = await VideoService.getVideos(userMode, query, page, activeSource, activeSort, activeDuration, controller.signal);
         if (controller.signal.aborted || requestId !== requestIdRef.current) return;
         if (vids.length === 0) setHasMore(false);
-        if (page === 1) setVideos(vids);
-        else setVideos((prev) => [...prev, ...vids]);
+        const filtered = vids.filter(v => {
+          const id = v.id;
+          if (!id) return false;
+          if (seenIdsRef.current.has(id)) return false;
+          seenIdsRef.current.add(id);
+          return true;
+        });
+        if (page === 1) setVideos(filtered);
+        else setVideos((prev) => [...prev, ...filtered]);
       } catch {
         if (controller.signal.aborted || requestId !== requestIdRef.current) return;
         setHasMore(false);
@@ -318,7 +343,7 @@ interface HomeProps {
                 </button>
                 <div className="w-px h-6 bg-white/10 mx-1 flex-shrink-0"></div>
                 {currentCategories.map(cat => (
-                  <button key={cat} onClick={() => { setActiveCategory(cat); setShowAllCategories(false); }} className={`px-4 py-1.5 rounded-none text-xs font-bold whitespace-nowrap transition border-b-2 flex-shrink-0 ${activeCategory === cat ? 'border-brand-gold text-brand-gold' : 'border-transparent text-gray-400 hover:text-white'}`}>
+                  <button key={cat} onClick={() => { setActiveCategory(cat); setSearchQuery(''); setShowAllCategories(false); }} className={`px-4 py-1.5 rounded-none text-xs font-bold whitespace-nowrap transition border-b-2 flex-shrink-0 ${activeCategory === cat ? 'border-brand-gold text-brand-gold' : 'border-transparent text-gray-400 hover:text-white'}`}>
                     {cat}
                   </button>
                 ))}

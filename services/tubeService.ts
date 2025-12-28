@@ -259,18 +259,19 @@ export const TubeAdapter = {
     try {
        const API_URL = `https://www.pornhub.com/webmasters/pornstars`;
 
-       // Best-effort: pornstars endpoint is unstable/blocked; do not break UI.
+       // Browser cannot call Pornhub directly (CORS + redirects). Proxy-only and best-effort.
+       const raw = await fetchWithProxy(API_URL, signal);
+       if (raw.trim().startsWith('<!DOCTYPE') || raw.trim().startsWith('<html')) {
+         throw new Error('Pornstars endpoint returned HTML (blocked)');
+       }
+
        let data: PornhubPornstarResponse;
        try {
-         const direct = await fetch(API_URL, { signal });
-         if (!direct.ok) throw new Error(`Status ${direct.status}`);
-         data = await direct.json();
-       } catch (e) {
-         if (isAbortError(e, signal)) throw e;
-         const raw = await fetchWithProxy(API_URL, signal);
          data = JSON.parse(raw);
+       } catch {
+         throw new Error('Pornstars endpoint returned non-JSON response');
        }
-       
+
        return data.pornstars.slice(0, 50).map(p => ({
          id: `star_${p.pornstar_name.replace(/\s+/g, '_')}`,
          name: p.pornstar_name,
