@@ -8,7 +8,7 @@ import { VideoEditorModal } from './VideoEditorModal';
 import { RecommendationService } from '../services/recommendationService';
 import { TicketService, SupportTicket, TicketStatus } from '../services/ticketService';
 import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../services/supabase';
+import { supabase, supabaseAnonKey } from '../services/supabase';
 
 interface AdminDashboardProps {
   onExit: () => void;
@@ -86,14 +86,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onExit }) => {
     setCatalogSyncError(null);
     setCatalogSyncResult(null);
     try {
-      const { data, error } = await supabase.functions.invoke('catalog-sync', {
-        body: { pages: 1, per_page: 24, sources: ['Eporner', 'Pornhub'] }
+      const { data: sessData } = await supabase.auth.getSession();
+      const token = sessData?.session?.access_token;
+      if (!token) throw new Error('Not authenticated');
+
+      const res = await fetch('/api/supabase/functions/v1/catalog-sync', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'authorization': `Bearer ${token}`,
+          'apikey': supabaseAnonKey,
+        },
+        body: JSON.stringify({ pages: 1, per_page: 24, sources: ['Eporner', 'Pornhub'] }),
       });
-      if (error) {
-        setCatalogSyncError(error.message);
-      } else {
-        setCatalogSyncResult(data);
+
+      if (!res.ok) {
+        const txt = await res.text().catch(() => '');
+        throw new Error(`catalog-sync failed: ${res.status} ${txt}`);
       }
+      const data = await res.json().catch(() => ({}));
+      setCatalogSyncResult(data);
     } catch (e: any) {
       setCatalogSyncError(e?.message || 'Failed to sync catalog');
     } finally {
