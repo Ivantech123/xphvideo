@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Video, Creator } from '../types';
 import { VideoService } from '../services/videoService';
+import { AdminService } from '../services/adminService';
 import { Icon } from '../components/Icon';
 import { useLanguage } from '../contexts/LanguageContext';
+import { VideoEditorModal } from './VideoEditorModal';
 
 interface AdminDashboardProps {
   onExit: () => void;
@@ -15,32 +17,65 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onExit }) => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'videos' | 'creators'>('videos');
   const [searchQuery, setSearchQuery] = useState('');
+  
+  const [editingVideo, setEditingVideo] = useState<Video | null | undefined>(undefined); // undefined = closed, null = new, object = edit
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
-    console.log('[AdminDashboard] Loading data...');
+  const loadData = async (signal?: AbortSignal) => {
+    if (import.meta.env.DEV) console.log('[AdminDashboard] Loading data...');
     setLoading(true);
     try {
       const [vids, creats] = await Promise.all([
-        VideoService.getVideos('General', searchQuery || 'popular'),
-        VideoService.getCreators()
+        VideoService.getVideos('General', searchQuery || 'popular', 1, 'All', 'trending', 'All', signal),
+        VideoService.getCreators(signal)
       ]);
-      console.log('[AdminDashboard] Data loaded:', { videos: vids.length, creators: creats.length });
+      if (signal?.aborted) return;
+      if (import.meta.env.DEV) console.log('[AdminDashboard] Data loaded:', { videos: vids.length, creators: creats.length });
       setVideos(vids);
       setCreators(creats);
     } catch (e) {
+      if (signal?.aborted) return;
       console.error('[AdminDashboard] Failed to load data:', e);
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   };
 
+  useEffect(() => {
+    const controller = new AbortController();
+    loadData(controller.signal);
+    return () => controller.abort();
+  }, []);
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    loadData();
+    const controller = new AbortController();
+    loadData(controller.signal);
+  };
+
+  const handleDelete = (id: string) => {
+    if (window.confirm('Are you sure you want to block/delete this video?')) {
+        AdminService.blockVideo(id);
+        AdminService.deleteManualVideo(id); // Attempt to delete if manual
+        setVideos(prev => prev.filter(v => v.id !== id));
+    }
+  };
+
+  const handleSaveVideo = (video: Video) => {
+    if (editingVideo === null) {
+      // Add New
+      AdminService.addManualVideo(video);
+      setVideos(prev => [video, ...prev]);
+    } else {
+      // Edit Existing
+      AdminService.updateManualVideo(video);
+      // Also save as edit override if it was an external video
+      if (!video.id.startsWith('manual_')) {
+         AdminService.saveVideoEdit(video.id, video);
+      }
+      
+      setVideos(prev => prev.map(v => v.id === video.id ? video : v));
+    }
+    setEditingVideo(undefined);
   };
 
   return (
@@ -61,11 +96,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onExit }) => {
              <button className="bg-brand-surface border border-white/10 px-4 py-2 rounded-lg hover:border-brand-gold transition flex items-center gap-2">
                <Icon name="Settings" size={18} /> {t('settings')}
              </button>
-             <button className="bg-brand-gold text-black px-4 py-2 rounded-lg font-bold hover:bg-yellow-500 transition flex items-center gap-2">
+             <button onClick={() => setEditingVideo(null)} className="bg-brand-gold text-black px-4 py-2 rounded-lg font-bold hover:bg-yellow-500 transition flex items-center gap-2">
                <Icon name="Plus" size={18} /> {t('add_new')}
              </button>
           </div>
         </header>
+
+        {editingVideo !== undefined && (
+          <VideoEditorModal 
+            video={editingVideo} 
+            onSave={handleSaveVideo} 
+            onClose={() => setEditingVideo(undefined)} 
+          />
+        )}
 
         {/* Stats Row */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
@@ -155,10 +198,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onExit }) => {
                          <div className="text-xs text-gray-500">{video.tags.slice(0, 3).map(t => t.label).join(', ')}</div>
                        </td>
                        <td className="p-4">
-                         <span className={`text-xs px-2 py-1 rounded ${video.source === 'Pornhub' ? 'bg-orange-900/30 text-orange-400' : 'bg-red-900/30 text-red-400'}`}>
-                           {video.source || t('external_source')}
-                         </span>
-                       </td>
+                        <span className={`text-xs px-2 py-1 rounded ${
+                          video.source === 'Pornhub' ? 'bg-orange-900/30 text-orange-400' : 
+                          video.source === 'Local' ? 'bg-green-900/30 text-green-400' :
+                          'bg-red-900/30 text-red-400'
+                        }`}>
+                          {video.source || t('external_source')}
+                        </span>
+                      </td>
                        <td className="p-4 text-sm font-mono text-gray-400">
                          {Math.floor(video.duration / 60)}:{(video.duration % 60).toString().padStart(2, '0')}
                        </td>
@@ -166,8 +213,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onExit }) => {
                          {video.views.toLocaleString()}
                        </td>
                        <td className="p-4">
-                         <button className="text-gray-400 hover:text-white mr-2"><Icon name="Edit" size={16} /></button>
-                         <button className="text-gray-400 hover:text-red-500"><Icon name="Trash" size={16} /></button>
+                         <button onClick={() => setEditingVideo(video)} className="text-gray-400 hover:text-white mr-2"><Icon name="Edit" size={16} /></button>
+                         <button onClick={() => handleDelete(video.id)} className="text-gray-400 hover:text-red-500"><Icon name="Trash" size={16} /></button>
                        </td>
                      </tr>
                    ))}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { HashRouter as Router, useSearchParams } from 'react-router-dom';
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
@@ -74,8 +74,8 @@ interface HomeProps {
   activeCategory: string;
 }
 
-const MainContent: React.FC<HomeProps> = ({ onVideoClick, onCreatorClick, userMode, currentView, onOpenLegal, searchQuery, setSearchQuery, setActiveCategory, activeCategory }) => {
-  console.log('[MainContent] Rendering, currentView:', currentView);
+ const MainContent: React.FC<HomeProps> = ({ onVideoClick, onCreatorClick, userMode, currentView, onOpenLegal, searchQuery, setSearchQuery, setActiveCategory, activeCategory }) => {
+  if (import.meta.env.DEV) console.log('[MainContent] Rendering, currentView:', currentView);
   const { t } = useLanguage();
   const [videos, setVideos] = useState<Video[]>([]);
   const [creators, setCreators] = useState<Creator[]>([]);
@@ -87,9 +87,11 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, onCreatorClick, userMo
   const [activeSort, setActiveSort] = useState<'trending' | 'new' | 'best'>('trending');
   const [activeDuration, setActiveDuration] = useState('All');
   const [showAllCategories, setShowAllCategories] = useState(false);
+  const requestIdRef = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
   
   // Dynamic Category List
-  const getCategories = () => {
+  const currentCategories = useMemo(() => {
     switch (userMode) {
       case 'Him': return CATEGORIES_HIM;
       case 'Her': return CATEGORIES_HER;
@@ -99,66 +101,98 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, onCreatorClick, userMo
       case 'Lesbian': return CATEGORIES_LESBIAN;
       default: return CATEGORIES_GENERAL;
     }
-  };
-  const currentCategories = getCategories();
+  }, [userMode]);
 
-  // Reset page and videos when filter changes
+  // Reset page and videos when filters change (home view only)
   useEffect(() => {
-    console.log('[MainContent] Filter changed, resetting...', { userMode, activeCategory, searchQuery, activeSource, activeSort, activeDuration });
+    if (currentView !== 'home') return;
+    if (import.meta.env.DEV) console.log('[MainContent] Filter changed, resetting...', { userMode, activeCategory, searchQuery, activeSource, activeSort, activeDuration });
     setPage(1);
     setVideos([]);
     setHasMore(true);
-  }, [userMode, activeCategory, searchQuery, activeSource, activeSort, activeDuration]);
+  }, [userMode, activeCategory, searchQuery, activeSource, activeSort, activeDuration, currentView]);
 
-  // Load Data Effect
+  // Local-only views (no network)
   useEffect(() => {
-    // If search is active, use it. Otherwise use active category.
-    // Reset category to first item when mode changes, unless searching.
-    if (!searchQuery) {
-        // Only reset category if we are not searching
-        if (!currentCategories.includes(activeCategory)) {
-            setActiveCategory(currentCategories[0]);
-        }
+    abortRef.current?.abort();
+    requestIdRef.current += 1;
+    if (currentView === 'favorites') {
+      setLoading(false);
+      setHasMore(false);
+      setVideos(VideoService.getFavorites());
+      return;
+    }
+    if (currentView === 'history') {
+      setLoading(false);
+      setHasMore(false);
+      setVideos(VideoService.getHistory());
+      return;
+    }
+    if (currentView === 'categories' || currentView === 'admin' || currentView === 'shorts') {
+      setLoading(false);
+      return;
+    }
+  }, [currentView]);
+
+  // Fetch creators for Models view
+  useEffect(() => {
+    if (currentView !== 'models') return;
+
+    const controller = new AbortController();
+    abortRef.current?.abort();
+    abortRef.current = controller;
+    const requestId = ++requestIdRef.current;
+
+    setLoading(true);
+    VideoService.getCreators(controller.signal)
+      .then((c) => {
+        if (controller.signal.aborted || requestId !== requestIdRef.current) return;
+        setCreators(c);
+      })
+      .finally(() => {
+        if (controller.signal.aborted || requestId !== requestIdRef.current) return;
+        setLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [currentView]);
+
+  // Load videos for Home view
+  useEffect(() => {
+    if (currentView !== 'home') return;
+
+    if (!searchQuery && !currentCategories.includes(activeCategory)) {
+      setActiveCategory(currentCategories[0]);
+      return;
     }
 
-    const loadData = async () => {
-      // Determine what to fetch based on searchQuery (navigation) or activeCategory
-      const query = searchQuery || activeCategory;
-      console.log(`[MainContent] Loading data - page: ${page}, query: "${query}", userMode: ${userMode}`);
-      setLoading(true);
-      try {
-        // 1. Fetch Videos
-        const vids = await VideoService.getVideos(userMode, query, page, activeSource, activeSort, activeDuration);
-        
+    const controller = new AbortController();
+    abortRef.current?.abort();
+    abortRef.current = controller;
+    const requestId = ++requestIdRef.current;
+
+    const query = searchQuery || activeCategory;
+    if (import.meta.env.DEV) console.log(`[MainContent] Loading videos - page: ${page}, query: "${query}", userMode: ${userMode}`);
+    setLoading(true);
+
+    VideoService.getVideos(userMode, query, page, activeSource, activeSort, activeDuration, controller.signal)
+      .then((vids) => {
+        if (controller.signal.aborted || requestId !== requestIdRef.current) return;
         if (vids.length === 0) setHasMore(false);
-
-        // 2. Filter by View Type (History/Favs)
-        if (currentView === 'favorites') {
-          setVideos(VideoService.getFavorites());
-          setHasMore(false); // No pagination for local lists yet
-        } else if (currentView === 'history') {
-          setVideos(VideoService.getHistory());
-          setHasMore(false);
-        } else {
-          // Normal Home / Category View - Append if page > 1
-          if (page === 1) {
-             setVideos(vids);
-          } else {
-             setVideos(prev => [...prev, ...vids]);
-          }
-        }
-
-        // 3. Fetch Creators
-        if (currentView === 'models' && page === 1) {
-          const c = await VideoService.getCreators();
-          setCreators(c);
-        }
-      } finally {
+        if (page === 1) setVideos(vids);
+        else setVideos((prev) => [...prev, ...vids]);
+      })
+      .catch(() => {
+        if (controller.signal.aborted || requestId !== requestIdRef.current) return;
+        setHasMore(false);
+      })
+      .finally(() => {
+        if (controller.signal.aborted || requestId !== requestIdRef.current) return;
         setLoading(false);
-      }
-    };
-    loadData();
-  }, [userMode, activeCategory, currentView, searchQuery, page, activeSource, activeSort, activeDuration]);
+      });
+
+    return () => controller.abort();
+  }, [userMode, activeCategory, currentView, searchQuery, page, activeSource, activeSort, activeDuration, currentCategories, setActiveCategory]);
 
   // Render Logic based on View
   if (currentView === 'shorts') {
@@ -196,7 +230,7 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, onCreatorClick, userMo
   }
 
   if (currentView === 'categories') {
-    console.log('[MainContent] Rendering categories view, categories:', currentCategories);
+    if (import.meta.env.DEV) console.log('[MainContent] Rendering categories view, categories:', currentCategories);
     return (
        <div className="flex flex-col min-h-screen">
         <div className="p-6 flex-1">
@@ -204,7 +238,7 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, onCreatorClick, userMo
           <CategoryGrid 
             categories={currentCategories} 
             onSelectCategory={(cat) => {
-                console.log('[MainContent] Category selected:', cat);
+                if (import.meta.env.DEV) console.log('[MainContent] Category selected:', cat);
                 // setActiveCategory wrapper in App.tsx will also switch to 'home' view
                 setActiveCategory(cat);
                 setSearchQuery('');
@@ -404,7 +438,7 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, onCreatorClick, userMo
 // --- APP WRAPPER ---
 
 const VelvetApp = () => {
-  console.log('[VelvetApp] Component mounting...');
+  if (import.meta.env.DEV) console.log('[VelvetApp] Component mounting...');
   const [searchParams, setSearchParams] = useSearchParams();
   const [isVerified, setIsVerified] = useState<boolean | null>(null);
   const [isSidebarOpen, setSidebarOpen] = useState(true);
@@ -530,7 +564,7 @@ const VelvetApp = () => {
                isOpen={isSidebarOpen} 
                currentView={currentView}
                onChangeView={(view) => { 
-                 console.log('[App] onChangeView called with:', view);
+                 if (import.meta.env.DEV) console.log('[App] onChangeView called with:', view);
                  setCurrentView(view); 
                  setCurrentVideo(null); 
                  setCurrentCreator(null); 

@@ -16,13 +16,19 @@ export const BodyRatings: React.FC<BodyRatingsProps> = ({ userMode, onClose }) =
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const controller = new AbortController();
     const load = async () => {
       setLoading(true);
-      const data = await VideoService.getCreators();
-      setCreators(data);
-      setLoading(false);
+      try {
+        const data = await VideoService.getCreators(controller.signal);
+        if (controller.signal.aborted) return;
+        setCreators(data);
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
     };
     load();
+    return () => controller.abort();
   }, []);
 
   // Organize creators into pseudo-categories for the UI

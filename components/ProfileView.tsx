@@ -21,22 +21,27 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ creator, onVideoClick,
   const [isSubscribed, setIsSubscribed] = useState(false);
 
   useEffect(() => {
+    const controller = new AbortController();
+
     const loadData = async () => {
       setLoading(true);
       try {
         // Fetch videos by creator name
-        const vids = await VideoService.getVideos('General', creator.name);
+        const vids = await VideoService.getVideos('General', creator.name, 1, 'All', 'trending', 'All', controller.signal);
+        if (controller.signal.aborted) return;
         setVideos(vids);
         
         if (user) {
           const subbed = await SubscriptionService.isSubscribed(creator.id);
+          if (controller.signal.aborted) return;
           setIsSubscribed(subbed);
         }
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
     };
     loadData();
+    return () => controller.abort();
   }, [creator, user]);
 
   const toggleSubscribe = async () => {

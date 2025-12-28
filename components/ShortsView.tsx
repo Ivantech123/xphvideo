@@ -19,22 +19,26 @@ export const ShortsView: React.FC<ShortsViewProps> = ({ userMode, onVideoClick, 
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    const controller = new AbortController();
+
     const loadShorts = async () => {
       setLoading(true);
       try {
         // Fetch shorts using the special query 'shorts' which the service handles
-        const results = await VideoService.getVideos(userMode, 'shorts', 1, 'All');
+        const results = await VideoService.getVideos(userMode, 'shorts', 1, 'All', 'trending', 'All', controller.signal);
+        if (controller.signal.aborted) return;
         setVideos(results);
         if (results.length > 0) {
             setActiveVideoId(results[0].id);
         }
       } catch (e) {
-        console.error("Failed to load shorts", e);
+        if (!controller.signal.aborted) console.error("Failed to load shorts", e);
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
     };
     loadShorts();
+    return () => controller.abort();
   }, [userMode]);
 
   useEffect(() => {

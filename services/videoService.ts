@@ -1,8 +1,8 @@
 import { Video, UserMode, Creator } from '../types';
-import { MOCK_VIDEOS, CREATORS } from '../constants';
 import { TubeAdapter } from './tubeService';
 import { CATEGORY_MAP } from './categoryMap';
 import { RecommendationService } from './recommendationService';
+import { AdminService } from './adminService';
 
 // Fisher-Yates shuffle for randomizing videos
 function shuffleArray<T>(array: T[]): T[] {
@@ -14,11 +14,24 @@ function shuffleArray<T>(array: T[]): T[] {
   return arr;
 }
 
-// --- API SIMULATION & PARSING LOGIC ---
+type CacheEntry<T> = { ts: number; data: T };
+
+const VIDEOS_CACHE_TTL_MS = 30_000;
+const CREATORS_CACHE_TTL_MS = 5 * 60_000;
+
+const videosCache = new Map<string, CacheEntry<Video[]>>();
+let creatorsCache: CacheEntry<Creator[]> | null = null;
+
+const isAbortError = (e: unknown, signal?: AbortSignal) => {
+  if (signal?.aborted) return true;
+  return e instanceof DOMException && e.name === 'AbortError';
+};
+
+// --- DATA FETCHING & PARSING LOGIC ---
 
 /**
- * In a real application, this service would fetch data from an external API endpoint
- * (e.g., a Tube site affiliate API or a headless CMS).
+ * Service to fetch data from external API endpoints
+ * (Tube site affiliate APIs or headless CMS).
  */
 
 export const VideoService = {
@@ -29,7 +42,8 @@ export const VideoService = {
     page: number = 1,
     source: string = 'All',
     sort: 'trending' | 'new' | 'best' = 'trending',
-    durationFilter: string = 'All'
+    durationFilter: string = 'All',
+    signal?: AbortSignal
   ): Promise<Video[]> {
     // 1. Fetch External Data (Real API)
     // We map UserMode/Category to search queries
@@ -38,7 +52,9 @@ export const VideoService = {
     let sortMode: 'trending' | 'new' | 'best' = sort;
     let filterShorts = false; // Filter for videos under 60 seconds
     
-    console.log('[VideoService] getVideos called:', { mode, category, page, source });
+    if (import.meta.env.DEV) console.log('[VideoService] getVideos called:', { mode, category, page, source });
+
+    let cacheKey: string | null = null;
     
     try {
         // Map 'Him', 'Her' etc to base search terms if no specific category is selected
@@ -56,7 +72,7 @@ export const VideoService = {
         
         query = mappedCategory || baseQuery;
         
-        console.log('[VideoService] Query params:', { baseQuery, rawCategory, mappedCategory, query });
+        if (import.meta.env.DEV) console.log('[VideoService] Query params:', { baseQuery, rawCategory, mappedCategory, query });
 
         // Detect sort mode and special filters from query
         if (query === 'trending' || query === 'В тренде') {
@@ -81,23 +97,29 @@ export const VideoService = {
         }
         
         const finalQuery = query || baseQuery || 'popular';
-        console.log('[VideoService] Final query:', finalQuery, 'sortMode:', sortMode, 'durationFilter:', durationFilter);
+        if (import.meta.env.DEV) console.log('[VideoService] Final query:', finalQuery, 'sortMode:', sortMode, 'durationFilter:', durationFilter);
+
+        cacheKey = JSON.stringify({ mode, finalQuery, page, source, sortMode, durationFilter });
+        const cached = videosCache.get(cacheKey);
+        if (cached && Date.now() - cached.ts < VIDEOS_CACHE_TTL_MS) {
+          return cached.data;
+        }
 
         // Fetch from all sources in parallel
         if (source === 'All') {
-            console.log('[VideoService] Fetching from all sources with query:', finalQuery, 'sortMode:', sortMode);
+            if (import.meta.env.DEV) console.log('[VideoService] Fetching from all sources with query:', finalQuery, 'sortMode:', sortMode);
             
             const results = await Promise.all([
-                TubeAdapter.fetchPornhub(finalQuery, page, sortMode).catch(e => { console.error('[VideoService] Pornhub fetch error:', e); return []; }),
-                TubeAdapter.fetchEporner(finalQuery, 24, page, sortMode).catch(e => { console.error('[VideoService] Eporner fetch error:', e); return []; }),
-                TubeAdapter.fetchXVideos(finalQuery, page, sortMode).catch(e => { console.error('[VideoService] XVideos fetch error:', e); return []; })
+                TubeAdapter.fetchPornhub(finalQuery, page, sortMode, signal).catch(e => { if (!isAbortError(e, signal)) console.error('[VideoService] Pornhub fetch error:', e); return []; }),
+                TubeAdapter.fetchEporner(finalQuery, 24, page, sortMode, signal).catch(e => { if (!isAbortError(e, signal)) console.error('[VideoService] Eporner fetch error:', e); return []; }),
+                TubeAdapter.fetchXVideos(finalQuery, page, sortMode, signal).catch(e => { if (!isAbortError(e, signal)) console.error('[VideoService] XVideos fetch error:', e); return []; })
             ]);
             
             const ph = results[0] || [];
             const ep = results[1] || [];
             const xv = results[2] || [];
             
-            console.log('[VideoService] Fetched videos:', { pornhub: ph.length, eporner: ep.length, xvideos: xv.length });
+            if (import.meta.env.DEV) console.log('[VideoService] Fetched videos:', { pornhub: ph.length, eporner: ep.length, xvideos: xv.length });
             
             // Interleave
             const maxLength = Math.max(ph.length, ep.length, xv.length);
@@ -108,26 +130,41 @@ export const VideoService = {
                 if (xv[i]) videos.push(xv[i]);
             }
             
+            // Add Manual Videos (Only on Page 1 and if query is generic or matches)
+            if (page === 1) {
+                const manualVideos = AdminService.getManualVideos();
+                // Simple filter for manual videos based on query
+                const filteredManual = manualVideos.filter(v => {
+                    if (!query) return true;
+                    return v.title.toLowerCase().includes(query.toLowerCase()) || 
+                           v.tags.some(t => t.label.toLowerCase().includes(query.toLowerCase()));
+                });
+                videos = [...filteredManual, ...videos];
+            }
+            
             // Sort by recommendation score only if "trending" or default
             if (sortMode === 'trending') {
                 videos = RecommendationService.sortByRecommendation(videos);
             }
-            console.log('[VideoService] Total videos after interleave:', videos.length);
+            if (import.meta.env.DEV) console.log('[VideoService] Total videos after interleave:', videos.length);
         } else {
             // Single source - fetch directly
             if (source === 'Pornhub') {
-                videos = await TubeAdapter.fetchPornhub(finalQuery, page, sortMode);
+                videos = await TubeAdapter.fetchPornhub(finalQuery, page, sortMode, signal);
             } else if (source === 'Eporner') {
-                videos = await TubeAdapter.fetchEporner(finalQuery, 24, page, sortMode);
+                videos = await TubeAdapter.fetchEporner(finalQuery, 24, page, sortMode, signal);
             } else if (source === 'XVideos') {
-                videos = await TubeAdapter.fetchXVideos(finalQuery, page, sortMode);
+                videos = await TubeAdapter.fetchXVideos(finalQuery, page, sortMode, signal);
             }
         }
+        
+        // --- ADMIN: Process Blocklist & Edits ---
+        videos = AdminService.processVideos(videos);
         
         // Filter for shorts (videos under 60 seconds)
         if (filterShorts) {
             videos = videos.filter(v => v.duration > 0 && v.duration <= 60);
-            console.log('[VideoService] Filtered shorts, remaining:', videos.length);
+            if (import.meta.env.DEV) console.log('[VideoService] Filtered shorts, remaining:', videos.length);
         }
 
         // Filter by duration buckets
@@ -139,12 +176,13 @@ export const VideoService = {
             } else if (durationFilter === 'Long') {
                 videos = videos.filter(v => v.duration > 1200);
             }
-            console.log('[VideoService] Duration filter applied:', durationFilter, 'remaining:', videos.length);
+            if (import.meta.env.DEV) console.log('[VideoService] Duration filter applied:', durationFilter, 'remaining:', videos.length);
         }
         
     } catch (e) {
+        if (isAbortError(e, signal)) throw e;
         console.error('[VideoService] External API failed:', e);
-        videos = []; 
+        videos = [];
     }
 
     // Shuffle if it's a general query to provide variety
@@ -152,31 +190,41 @@ export const VideoService = {
         videos = shuffleArray(videos);
     }
 
-    console.log('[VideoService] Returning', videos.length, 'videos');
+    if (import.meta.env.DEV) console.log('[VideoService] Returning', videos.length, 'videos');
+
+    if (cacheKey) videosCache.set(cacheKey, { ts: Date.now(), data: videos });
     return videos;
   },
 
-  async getVideoById(id: string): Promise<Video | undefined> {
+  async getVideoById(id: string, signal?: AbortSignal): Promise<Video | undefined> {
     // Try to fetch dynamic data by ID via TubeAdapter (supports ep_ and ph_ prefixes)
-    return await TubeAdapter.fetchVideoById(id);
+    return await TubeAdapter.fetchVideoById(id, signal);
   },
 
-  async getCreators() {
+  async getCreators(signal?: AbortSignal) {
     // Dynamic creators from Pornhub
+    if (creatorsCache && Date.now() - creatorsCache.ts < CREATORS_CACHE_TTL_MS) {
+      return creatorsCache.data;
+    }
     try {
-        const stars = await TubeAdapter.fetchPornstars();
-        if (stars.length > 0) return stars;
+        const stars = await TubeAdapter.fetchPornstars(signal);
+        if (stars.length > 0) {
+          creatorsCache = { ts: Date.now(), data: stars };
+          return stars;
+        }
     } catch (e) {
+        if (isAbortError(e, signal)) throw e;
         console.warn("Failed to fetch creators", e);
     }
     return []; 
   },
 
-  async getCreatorById(id: string): Promise<Creator | undefined> {
+  async getCreatorById(id: string, signal?: AbortSignal): Promise<Creator | undefined> {
     try {
-        const creators = await this.getCreators();
+        const creators = await this.getCreators(signal);
         return creators.find(c => c.id === id);
     } catch (e) {
+        if (isAbortError(e, signal)) throw e;
         console.warn("Failed to fetch creator by ID", e);
         return undefined;
     }

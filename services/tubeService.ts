@@ -1,5 +1,10 @@
 import { Video, Creator } from '../types';
 
+const isAbortError = (e: unknown, signal?: AbortSignal) => {
+  if (signal?.aborted) return true;
+  return e instanceof DOMException && e.name === 'AbortError';
+};
+
 // Interfaces for External APIs
 interface EpornerVideo {
   id: string;
@@ -15,6 +20,49 @@ interface EpornerVideo {
   default_thumb: { src: string; width: number; height: number };
   thumbs: { src: string; width: number; height: number }[];
 }
+
+// Robust Proxy Rotator
+const fetchWithProxy = async (targetUrl: string, signal?: AbortSignal): Promise<string> => {
+  const proxies = [
+    { name: 'corsproxy', url: (u: string) => `https://corsproxy.io/?${encodeURIComponent(u)}` },
+    { name: 'codetabs', url: (u: string) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}` },
+    { name: 'thingproxy', url: (u: string) => `https://thingproxy.freeboard.io/fetch/${u}` },
+    { name: 'allorigins', url: (u: string) => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`, json: true }
+  ];
+
+  for (const proxy of proxies) {
+    try {
+      const res = await fetch(proxy.url(targetUrl), { signal });
+      if (!res.ok) throw new Error(`Status ${res.status}`);
+      
+      if (proxy.json) {
+        const data = await res.json();
+        return data.contents; 
+      }
+      return await res.text();
+    } catch (e) {
+      if (isAbortError(e, signal)) throw e;
+      console.warn(`[TubeService] Proxy ${proxy.name} failed:`, e);
+    }
+  }
+  throw new Error('All proxies failed');
+};
+
+const extractEmbedSrc = (embed: string | undefined | null): string => {
+  const raw = (embed || '').trim();
+  if (!raw) return '';
+
+  // Sometimes API can return a direct URL instead of iframe HTML
+  if (/^https?:\/\//i.test(raw)) return raw;
+
+  // Typical: <iframe src="..."> or <iframe src='...'>
+  const m = raw.match(/src\s*=\s*['"]([^'"]+)['"]/i);
+  if (m?.[1]) return m[1];
+
+  // Last resort: first URL-like token
+  const m2 = raw.match(/https?:\/\/[^\s'"]+/i);
+  return m2?.[0] || '';
+};
 
 interface EpornerResponse {
   count: number;
@@ -64,7 +112,7 @@ interface PornhubPornstarResponse {
 export const TubeAdapter = {
   
   // EPORNER API (Documentation: https://www.eporner.com/api/v2/)
-  async fetchEporner(query: string = '4k', limit: number = 20, page: number = 1, sort: 'trending' | 'new' | 'best' = 'trending'): Promise<Video[]> {
+  async fetchEporner(query: string = '4k', limit: number = 20, page: number = 1, sort: 'trending' | 'new' | 'best' = 'trending', signal?: AbortSignal): Promise<Video[]> {
     try {
       let order = 'top-weekly';
       if (sort === 'new') order = 'latest';
@@ -78,14 +126,14 @@ export const TubeAdapter = {
       let data: EpornerResponse;
       try {
         // Try direct API first
-        const response = await fetch(API_URL);
+        const response = await fetch(API_URL, { signal });
         if (!response.ok) throw new Error('Direct API failed');
         data = await response.json();
       } catch {
         // Fallback to corsproxy
         console.log('[TubeAdapter] Eporner direct failed, trying corsproxy...');
         const PROXY_URL = `https://corsproxy.io/?${encodeURIComponent(API_URL)}`;
-        const response = await fetch(PROXY_URL);
+        const response = await fetch(PROXY_URL, { signal });
         if (!response.ok) throw new Error('Proxy also failed');
         data = await response.json();
       }
@@ -94,6 +142,8 @@ export const TubeAdapter = {
         // Extract first keyword as pseudo-author name for variety
         const keywords = ev.keywords?.split(',').map(k => k.trim()).filter(k => k.length > 0) || [];
         const pseudoAuthor = keywords[0] || 'Eporner';
+
+        const embedUrl = extractEmbedSrc(ev.embed) || `https://www.eporner.com/embed/${ev.id}`;
         
         return {
         id: `ep_${ev.id}`,
@@ -101,7 +151,7 @@ export const TubeAdapter = {
         description: ev.keywords, 
         thumbnail: ev.default_thumb.src,
         videoUrl: '', 
-        embedUrl: ev.embed.match(/src="([^"]+)"/)?.[1] || '', 
+        embedUrl: embedUrl,
         duration: ev.length_sec,
         creator: {
           id: `ep_${pseudoAuthor.replace(/\s+/g, '_')}`,
@@ -119,13 +169,14 @@ export const TubeAdapter = {
       });
 
     } catch (error) {
+      if (isAbortError(error, signal)) throw error;
       console.error("Failed to fetch from Eporner:", error);
       return [];
     }
   },
 
   // PORNHUB API
-  async fetchPornhub(query: string = 'popular', page: number = 1, sort: 'trending' | 'new' | 'best' = 'trending'): Promise<Video[]> {
+  async fetchPornhub(query: string = 'popular', page: number = 1, sort: 'trending' | 'new' | 'best' = 'trending', signal?: AbortSignal): Promise<Video[]> {
     try {
        const PROXY = 'https://corsproxy.io/?'; 
        let ordering = 'mostviewed'; // trending/default
@@ -134,9 +185,8 @@ export const TubeAdapter = {
 
        const API_URL = `https://www.pornhub.com/webmasters/search?search=${encodeURIComponent(query)}&page=${page}&thumbsize=large&ordering=${ordering}`;
        
-       const response = await fetch(PROXY + encodeURIComponent(API_URL));
-       if (!response.ok) throw new Error('PH Network response was not ok');
-
+       const response = await fetch(PROXY + encodeURIComponent(API_URL), { signal });
+       if (!response.ok) throw new Error('PH API response was not ok');
        const data: PornhubResponse = await response.json();
        
        console.log('[TubeAdapter] Pornhub response videos:', data.videos?.length || 0);
@@ -182,19 +232,19 @@ export const TubeAdapter = {
       });
 
     } catch (error) {
+       if (isAbortError(error, signal)) throw error;
        console.error("Failed to fetch from Pornhub:", error);
        return [];
     }
   },
 
-  async fetchPornstars(): Promise<Creator[]> {
+  async fetchPornstars(signal?: AbortSignal): Promise<Creator[]> {
     try {
        const PROXY = 'https://corsproxy.io/?'; 
        const API_URL = `https://www.pornhub.com/webmasters/pornstars`;
        
-       const response = await fetch(PROXY + encodeURIComponent(API_URL));
+       const response = await fetch(PROXY + encodeURIComponent(API_URL), { signal });
        if (!response.ok) throw new Error('PH Pornstars Network response was not ok');
-
        const data: PornhubPornstarResponse = await response.json();
        
        return data.pornstars.slice(0, 50).map(p => ({
@@ -209,13 +259,14 @@ export const TubeAdapter = {
          }
        }));
     } catch (error) {
+       if (isAbortError(error, signal)) throw error;
        console.error("Failed to fetch pornstars", error);
        return [];
     }
   },
 
   // XVIDEOS API (Scraper via Proxy)
-  async fetchXVideos(query: string = 'best', page: number = 1, sort: 'trending' | 'new' | 'best' = 'trending'): Promise<Video[]> {
+  async fetchXVideos(query: string = 'best', page: number = 1, sort: 'trending' | 'new' | 'best' = 'trending', signal?: AbortSignal): Promise<Video[]> {
     console.log('[TubeAdapter] fetchXVideos called:', { query, page, sort });
     try {
       // XVideos search url. Page parameter is 'p'
@@ -230,20 +281,13 @@ export const TubeAdapter = {
       
       let html: string;
       try {
-        // Try allorigins first
-        const PROXY_URL = `https://api.allorigins.win/get?url=${encodeURIComponent(TARGET_URL)}`;
-        const response = await fetch(PROXY_URL);
-        if (!response.ok) throw new Error('allorigins failed');
-        const wrapper = await response.json();
-        html = wrapper.contents;
-      } catch {
-        // Fallback to corsproxy
-        console.log('[TubeAdapter] XVideos allorigins failed, trying corsproxy...');
-        const PROXY_URL = `https://corsproxy.io/?${encodeURIComponent(TARGET_URL)}`;
-        const response = await fetch(PROXY_URL);
-        if (!response.ok) throw new Error('All proxies failed');
-        html = await response.text();
+        html = await fetchWithProxy(TARGET_URL, signal);
+      } catch (e) {
+        if (isAbortError(e, signal)) throw e;
+        console.error('[TubeAdapter] XVideos fetch failed:', e);
+        return [];
       }
+      
       const parser = new DOMParser();
       const doc = parser.parseFromString(html, 'text/html');
       
@@ -278,7 +322,7 @@ export const TubeAdapter = {
             title: title,
             description: 'Source: XVideos',
             thumbnail: thumbnail,
-            videoUrl: '',
+            videoUrl: '', 
             embedUrl: embedUrl,
             duration: duration,
             creator: {
@@ -297,12 +341,13 @@ export const TubeAdapter = {
         })
         .filter((v): v is Video => v !== null);
     } catch (e) {
+      if (isAbortError(e, signal)) throw e;
       console.error('XVideos fetch error', e);
       return [];
     }
   },
 
-  async fetchVideoById(id: string): Promise<Video | undefined> {
+  async fetchVideoById(id: string, signal?: AbortSignal): Promise<Video | undefined> {
     // Eporner
     if (id.startsWith('ep_')) {
       const realId = id.replace('ep_', '');
@@ -310,26 +355,28 @@ export const TubeAdapter = {
         const API_URL = `https://www.eporner.com/api/v2/video/id/?id=${encodeURIComponent(realId)}&thumbsize=big&format=json`;
         let data: EpornerVideo;
         try {
-          const response = await fetch(API_URL);
+          const response = await fetch(API_URL, { signal });
           if (!response.ok) throw new Error('Direct API failed');
           data = await response.json();
         } catch {
           const PROXY_URL = `https://corsproxy.io/?${encodeURIComponent(API_URL)}`;
-          const response = await fetch(PROXY_URL);
+          const response = await fetch(PROXY_URL, { signal });
           if (!response.ok) throw new Error('Proxy also failed');
           data = await response.json();
         }
-
+        
         const keywords = data.keywords?.split(',').map(k => k.trim()).filter(k => k.length > 0) || [];
         const pseudoAuthor = keywords[0] || 'Eporner';
+
+        const embedUrl = extractEmbedSrc(data.embed) || `https://www.eporner.com/embed/${realId}`;
 
         return {
           id: `ep_${data.id}`,
           title: data.title,
           description: `Views: ${data.views} • Rating: ${data.rate}`,
           thumbnail: data.default_thumb.src,
-          videoUrl: '',
-          embedUrl: data.embed.match(/src="([^"]+)"/)?.[1] || '',
+          videoUrl: '', 
+          embedUrl: embedUrl,
           duration: data.length_sec,
           creator: {
             id: `ep_${pseudoAuthor.replace(/\s+/g, '_')}`,
@@ -345,6 +392,7 @@ export const TubeAdapter = {
           source: 'Eporner'
         };
       } catch (e) {
+        if (isAbortError(e, signal)) throw e;
         console.error('Eporner ID fetch error', e);
         return undefined;
       }
@@ -357,9 +405,8 @@ export const TubeAdapter = {
         const PROXY = 'https://corsproxy.io/?';
         const API_URL = `https://www.pornhub.com/webmasters/search?search=${encodeURIComponent(realId)}&thumbsize=large`;
 
-        const response = await fetch(PROXY + encodeURIComponent(API_URL));
+        const response = await fetch(PROXY + encodeURIComponent(API_URL), { signal });
         if (!response.ok) throw new Error('PH ID fetch failed');
-
         const data: PornhubResponse = await response.json();
         const ph = data.videos.find(v => v.video_id === realId) || data.videos[0];
         if (!ph) return undefined;
@@ -395,6 +442,7 @@ export const TubeAdapter = {
           source: 'Pornhub'
         };
       } catch (e) {
+        if (isAbortError(e, signal)) throw e;
         console.error('PH ID fetch error', e);
         return undefined;
       }
@@ -404,21 +452,17 @@ export const TubeAdapter = {
     if (id.startsWith('xv_')) {
       const realId = id.replace('xv_', '');
       try {
-        const TARGET_URL = `https://www.xvideos.com/video${encodeURIComponent(realId)}`;
-        const PROXY_URL = `https://api.allorigins.win/get?url=${encodeURIComponent(TARGET_URL)}`;
+        const TARGET_URL = `https://www.xvideos.com/video${realId}`;
+        
+        const html = await fetchWithProxy(TARGET_URL, signal);
 
-        const response = await fetch(PROXY_URL);
-        if (!response.ok) throw new Error('XVideos ID fetch failed');
-
-        const wrapper = await response.json();
-        const html = wrapper.contents;
         const parser = new DOMParser();
         const doc = parser.parseFromString(html, 'text/html');
-
+        
         const title = doc.querySelector('meta[property="og:title"]')?.getAttribute('content') || 'Unknown Title';
         const thumbnail = doc.querySelector('meta[property="og:image"]')?.getAttribute('content') || '';
         const durationStr = doc.querySelector('.duration')?.textContent || '0 min';
-
+        
         let duration = 0;
         if (durationStr.includes('h')) duration += parseInt(durationStr) * 3600;
         else if (durationStr.includes('min')) duration += parseInt(durationStr) * 60;
@@ -429,7 +473,7 @@ export const TubeAdapter = {
           title: title.replace(' - XVIDEOS.COM', ''),
           description: 'Source: XVideos',
           thumbnail: thumbnail,
-          videoUrl: '',
+          videoUrl: '', 
           embedUrl: `https://www.xvideos.com/embedframe/${realId}`,
           duration: duration,
           creator: {
@@ -440,13 +484,13 @@ export const TubeAdapter = {
             tier: 'Standard'
           },
           tags: [{ id: 'xv_tag', label: 'XVideos' }],
-          views: 0,
-          rating: 0,
+          views: 0, 
           quality: 'HD',
           source: 'XVideos' as any
         };
       } catch (e) {
-        console.error('XVideos ID fetch error', e);
+        if (isAbortError(e, signal)) throw e;
+        console.error("XVideos ID fetch error", e);
         return undefined;
       }
     }

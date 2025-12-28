@@ -74,17 +74,24 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose, onVide
         }
     }
     
-    // Fetch related videos based on tags or title
+    const controller = new AbortController();
+
     const loadRelated = async () => {
-       // Use up to 3 tags for better relevance, or title keywords
-       const tags = video.tags?.slice(0, 3).map(t => t.label).join(' ') || video.title.split(' ').slice(0, 3).join(' ');
-       const query = tags || 'popular';
-       const vids = await VideoService.getVideos('General', query);
-       // Filter out current video
-       const filtered = vids.filter(v => v.id !== video.id).slice(0, 12);
-       setRelatedVideos(filtered);
+      try {
+        const tags = video.tags?.slice(0, 3).map(t => t.label).join(' ') || video.title.split(' ').slice(0, 3).join(' ');
+        const query = tags || 'popular';
+        const vids = await VideoService.getVideos('General', query, 1, 'All', 'trending', 'All', controller.signal);
+        if (controller.signal.aborted) return;
+        const filtered = vids.filter(v => v.id !== video.id).slice(0, 12);
+        setRelatedVideos(filtered);
+      } catch (e) {
+        if (controller.signal.aborted) return;
+      }
     };
+
     loadRelated();
+
+    return () => controller.abort();
   }, [video, user]);
 
   const toggleFav = () => {
