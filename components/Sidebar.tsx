@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { SubscriptionService, Subscription } from '../services/subscriptionService';
 import { AdUnit } from './AdUnit';
 
-type ViewType = 'home' | 'models' | 'categories' | 'favorites' | 'history' | 'admin';
+type ViewType = 'home' | 'models' | 'categories' | 'favorites' | 'history' | 'admin' | 'shorts';
 
 interface SidebarProps {
   isOpen: boolean;

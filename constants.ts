@@ -65,3 +65,12 @@ export const CATEGORIES_LESBIAN = [
   'Все видео', 'Триббинг', 'Ножницы', 'Страпон', 'Оральный', 'Фейсситтинг', 'Фемдом', 'Белье', 'Массаж', 'Офис',
   'Подруги', 'Сестры', 'Мама и дочь', 'Учитель и ученица', 'Врач и пациент', 'Масло', 'Сквирт', 'Фистинг', 'Игрушки'
 ];
+
+export const POPULAR_SEARCHES = [
+  'reality', 'fake taxi', 'casting couch', 'property sex', 'stepmom', 'stepsister', 'stepbrother', 'milf', 'teen', '18+',
+  'japanese', 'korean', 'chinese', 'indian', 'arab', 'german', 'french', 'spanish', 'brazilian', 'russian',
+  'vintage', 'retro', 'classic', 'hd', '4k', 'vr', '360', 'compilation', 'pmv', 'amv',
+  'hentai uncensored', '3d', 'sfm', 'blender', 'overwatch', 'fortnite', 'league of legends',
+  'bellesa', 'adult time', 'brazzers', 'naughty america', 'blacked', 'tushy', 'vixen', 'pure taboo',
+  'sweet sinner', 'twistys', 'digital playground', 'evil angel', 'jules jordan', 'kink', 'uberdriver'
+];

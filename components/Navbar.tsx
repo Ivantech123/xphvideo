@@ -3,7 +3,7 @@ import { Icon } from './Icon';
 import { UserMode } from '../types';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
-import { CATEGORIES_GENERAL, CATEGORIES_HIM, CATEGORIES_HER, CATEGORIES_GAY, CATEGORIES_TRANS } from '../constants';
+import { CATEGORIES_GENERAL, CATEGORIES_HIM, CATEGORIES_HER, CATEGORIES_GAY, CATEGORIES_TRANS, POPULAR_SEARCHES } from '../constants';
 
 interface NavbarProps {
   onMenuClick: () => void;
@@ -22,7 +22,8 @@ const ALL_TAGS = Array.from(new Set([
   ...CATEGORIES_HIM,
   ...CATEGORIES_HER,
   ...CATEGORIES_GAY,
-  ...CATEGORIES_TRANS
+  ...CATEGORIES_TRANS,
+  ...POPULAR_SEARCHES
 ]));
 
 export const Navbar: React.FC<NavbarProps> = ({ 
@@ -42,36 +43,78 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [searchValue, setSearchValue] = useState('');
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [history, setHistory] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    const saved = localStorage.getItem('velvet_search_history');
+    if (saved) {
+      try {
+        setHistory(JSON.parse(saved));
+      } catch (e) {
+        console.error('Failed to parse search history', e);
+      }
+    }
+  }, []);
+
+  const addToHistory = (query: string) => {
+    const trimmed = query.trim();
+    if (!trimmed) return;
+    
+    const newHistory = [trimmed, ...history.filter(h => h !== trimmed)].slice(0, 10);
+    setHistory(newHistory);
+    localStorage.setItem('velvet_search_history', JSON.stringify(newHistory));
+  };
+
+  const removeHistoryItem = (e: React.MouseEvent, item: string) => {
+    e.stopPropagation();
+    const newHistory = history.filter(h => h !== item);
+    setHistory(newHistory);
+    localStorage.setItem('velvet_search_history', JSON.stringify(newHistory));
+  };
+
   const handleSearch = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
+      addToHistory(searchValue);
       onSearch(searchValue);
       setMobileSearchOpen(false);
       setShowSuggestions(false);
+      if (searchRef.current) {
+        (searchRef.current.querySelector('input') as HTMLInputElement)?.blur();
+      }
     }
   };
 
   const handleSuggestionClick = (suggestion: string) => {
     setSearchValue(suggestion);
+    addToHistory(suggestion);
     onSearch(suggestion);
     setMobileSearchOpen(false);
     setShowSuggestions(false);
   };
 
   useEffect(() => {
-    if (searchValue.trim().length > 1) {
-      const lower = searchValue.toLowerCase();
-      const filtered = ALL_TAGS.filter(tag => tag.toLowerCase().includes(lower)).slice(0, 8);
-      setSuggestions(filtered);
-      setShowSuggestions(true);
+    const trimmed = searchValue.trim().toLowerCase();
+    
+    if (trimmed.length === 0) {
+      // Show history when empty
+      if (history.length > 0) {
+         setSuggestions(history);
+      } else {
+         setSuggestions([]);
+      }
     } else {
-      setSuggestions([]);
-      setShowSuggestions(false);
+      // Filter history + tags
+      const historyMatches = history.filter(h => h.toLowerCase().includes(trimmed));
+      const tagMatches = ALL_TAGS.filter(tag => 
+        tag.toLowerCase().includes(trimmed) && !historyMatches.includes(tag)
+      ).slice(0, 8);
+      
+      setSuggestions([...historyMatches, ...tagMatches]);
     }
-  }, [searchValue]);
+  }, [searchValue, history]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -176,16 +219,39 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Search Suggestions Dropdown */}
           {showSuggestions && suggestions.length > 0 && (
             <div className="absolute top-full left-0 right-0 mt-1 bg-[#1a1a1a] border border-white/10 rounded-lg shadow-2xl z-50 max-h-64 overflow-y-auto">
-              {suggestions.map((s, i) => (
-                <button
-                  key={i}
-                  onClick={() => handleSuggestionClick(s)}
-                  className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-white/10 hover:text-white transition flex items-center gap-2"
-                >
-                  <Icon name="Search" size={14} className="text-gray-500" />
-                  {s}
-                </button>
-              ))}
+              {suggestions.map((s, i) => {
+                const isHistory = history.includes(s);
+                return (
+                  <div key={i} className="group flex items-center w-full hover:bg-white/10 transition">
+                    <button
+                      onClick={() => handleSuggestionClick(s)}
+                      className="flex-1 text-left px-4 py-2.5 text-sm text-gray-300 group-hover:text-white flex items-center gap-2"
+                    >
+                      <Icon name={isHistory ? "History" : "Search"} size={14} className={isHistory ? "text-gray-400" : "text-gray-500"} />
+                      {s}
+                    </button>
+                    {isHistory && (
+                      <button 
+                        onClick={(e) => removeHistoryItem(e, s)}
+                        className="p-2 mr-1 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
+                        title="Remove from history"
+                      >
+                        <Icon name="X" size={14} />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+              {history.length > 0 && !searchValue && (
+                <div className="border-t border-white/10 p-1">
+                  <button 
+                    onClick={clearHistory}
+                    className="w-full text-center text-xs text-gray-500 hover:text-white py-2 hover:bg-white/5 rounded transition"
+                  >
+                    {t('clear_history') || 'Clear History'}
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>

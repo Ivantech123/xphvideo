@@ -219,7 +219,7 @@ export const TubeAdapter = {
     console.log('[TubeAdapter] fetchXVideos called:', { query, page, sort });
     try {
       // XVideos search url. Page parameter is 'p'
-      // Sort: relevance (default), uploaddate (new), rating (best), views (trending?)
+      // Sort: relevance (default), uploaddate (new), rating (best)
       let sortParam = 'relevance';
       if (sort === 'new') sortParam = 'uploaddate';
       if (sort === 'best') sortParam = 'rating';
@@ -249,52 +249,55 @@ export const TubeAdapter = {
       
       const nodes = Array.from(doc.querySelectorAll('.thumb-block'));
       
-      return nodes.slice(0, 12).map((node: Element) => {
-         const id = node.getAttribute('data-id');
-         if (!id) return null; // Skip invalid nodes
+      return nodes
+        .slice(0, 12)
+        .map((node: Element) => {
+          const id = node.getAttribute('data-id');
+          if (!id) return null;
 
-         const titleEl = node.querySelector('.title a');
-         const title = titleEl?.textContent || 'Untitled';
-         const thumbEl = node.querySelector('img');
-         let thumbnail = thumbEl?.getAttribute('data-src') || thumbEl?.src || '';
-         
-         // Fix THUMBNUM placeholder - replace with actual number (1-10)
-         if (thumbnail.includes('THUMBNUM')) {
-           thumbnail = thumbnail.replace('THUMBNUM', '1');
-         }
-         
-         const durationEl = node.querySelector('.duration'); // Format "10 min" or "50 sec"
-         const durationStr = durationEl?.textContent || '0 min';
-         
-         // Parse duration
-         let duration = 0;
-         if (durationStr.includes('h')) duration += parseInt(durationStr) * 3600;
-         else if (durationStr.includes('min')) duration += parseInt(durationStr) * 60;
-         else duration += parseInt(durationStr);
+          const titleEl = node.querySelector('.title a');
+          const title = titleEl?.textContent || 'Untitled';
+          const thumbEl = node.querySelector('img');
+          let thumbnail = thumbEl?.getAttribute('data-src') || thumbEl?.getAttribute('src') || '';
 
-         // Extract Embed URL from ID
-         // XVideos embed: https://www.xvideos.com/embedframe/ID
-         const embedUrl = `https://www.xvideos.com/embedframe/${id}`;
+          if (thumbnail.includes('THUMBNUM')) {
+            thumbnail = thumbnail.replace('THUMBNUM', '1');
+          }
 
-         return {
-           id: `xv_${id}`,
-           title: title,
-           description: 'Source: XVideos',
-           thumbnail: thumbnail,
-           videoUrl: '', 
-           embedUrl: embedUrl,
-           duration: duration,
-           creator: undefined, // No profile for XVideos
-           tags: [{ id: 'xv_tag', label: 'XVideos' }],
-           views: 0, 
-           rating: 0,
-           quality: 'HD',
-           source: 'XVideos' as any // Cast because 'XVideos' might not be in literal type yet
-         };
-      }).filter(v => v !== null) as Video[];
+          const durationEl = node.querySelector('.duration');
+          const durationStr = durationEl?.textContent || '0 min';
+          let duration = 0;
+          if (durationStr.includes('h')) duration += parseInt(durationStr) * 3600;
+          else if (durationStr.includes('min')) duration += parseInt(durationStr) * 60;
+          else duration += parseInt(durationStr);
 
+          const embedUrl = `https://www.xvideos.com/embedframe/${id}`;
+
+          return {
+            id: `xv_${id}`,
+            title: title,
+            description: 'Source: XVideos',
+            thumbnail: thumbnail,
+            videoUrl: '',
+            embedUrl: embedUrl,
+            duration: duration,
+            creator: {
+              id: 'xv_net',
+              name: 'XVideos',
+              avatar: 'https://www.xvideos.com/favicon.ico',
+              verified: false,
+              tier: 'Standard'
+            },
+            tags: [{ id: 'xv_tag', label: 'XVideos' }],
+            views: 0,
+            rating: 0,
+            quality: 'HD',
+            source: 'XVideos' as any
+          };
+        })
+        .filter((v): v is Video => v !== null);
     } catch (e) {
-      console.error("XVideos fetch error", e);
+      console.error('XVideos fetch error', e);
       return [];
     }
   },
@@ -304,41 +307,45 @@ export const TubeAdapter = {
     if (id.startsWith('ep_')) {
       const realId = id.replace('ep_', '');
       try {
-        const API_URL = `https://www.eporner.com/api/v2_video/id/?id=${realId}&thumbsize=big&json=json`;
-        const PROXY_URL = `https://api.allorigins.win/get?url=${encodeURIComponent(API_URL)}`;
-        
-        const response = await fetch(PROXY_URL);
-        if (!response.ok) throw new Error('Eporner ID fetch failed');
-        
-        const wrapper = await response.json();
-        const data: EpornerVideo = JSON.parse(wrapper.contents);
-        
-        // Map single object
+        const API_URL = `https://www.eporner.com/api/v2/video/id/?id=${encodeURIComponent(realId)}&thumbsize=big&format=json`;
+        let data: EpornerVideo;
+        try {
+          const response = await fetch(API_URL);
+          if (!response.ok) throw new Error('Direct API failed');
+          data = await response.json();
+        } catch {
+          const PROXY_URL = `https://corsproxy.io/?${encodeURIComponent(API_URL)}`;
+          const response = await fetch(PROXY_URL);
+          if (!response.ok) throw new Error('Proxy also failed');
+          data = await response.json();
+        }
+
         const keywords = data.keywords?.split(',').map(k => k.trim()).filter(k => k.length > 0) || [];
         const pseudoAuthor = keywords[0] || 'Eporner';
 
         return {
-            id: `ep_${data.id}`,
-            title: data.title,
-            description: `Views: ${data.views} • Rating: ${data.rate}`,
-            thumbnail: data.default_thumb.src,
-            videoUrl: '', 
-            embedUrl: data.embed.match(/src="([^"]+)"/)?.[1] || '',
-            duration: data.length_sec,
-            creator: {
-              id: `ep_${pseudoAuthor.replace(/\s+/g, '_')}`,
-              name: pseudoAuthor,
-              avatar: 'https://www.eporner.com/favicon.ico',
-              verified: false,
-              tier: 'Standard'
-            },
-            tags: data.keywords.split(',').map((tag, idx) => ({ id: `tag_${idx}`, label: tag.trim() })),
-            views: data.views,
-            quality: 'HD',
-            source: 'Eporner'
+          id: `ep_${data.id}`,
+          title: data.title,
+          description: `Views: ${data.views} • Rating: ${data.rate}`,
+          thumbnail: data.default_thumb.src,
+          videoUrl: '',
+          embedUrl: data.embed.match(/src="([^"]+)"/)?.[1] || '',
+          duration: data.length_sec,
+          creator: {
+            id: `ep_${pseudoAuthor.replace(/\s+/g, '_')}`,
+            name: pseudoAuthor,
+            avatar: 'https://www.eporner.com/favicon.ico',
+            verified: false,
+            tier: 'Standard'
+          },
+          tags: keywords.map((tag, idx) => ({ id: `tag_${idx}`, label: tag })),
+          views: data.views,
+          rating: parseFloat(data.rate) || 0,
+          quality: 'HD',
+          source: 'Eporner'
         };
       } catch (e) {
-        console.error("Eporner ID fetch error", e);
+        console.error('Eporner ID fetch error', e);
         return undefined;
       }
     }
@@ -347,44 +354,48 @@ export const TubeAdapter = {
     if (id.startsWith('ph_')) {
       const realId = id.replace('ph_', '');
       try {
-         // Try searching by ID as keyword - simplistic approach for public API
-         const PROXY = 'https://corsproxy.io/?'; 
-         const API_URL = `https://www.pornhub.com/webmasters/search?search=${realId}&thumbsize=large`;
-         
-         const response = await fetch(PROXY + encodeURIComponent(API_URL));
-         if (!response.ok) throw new Error('PH ID fetch failed');
-         
-         const data: PornhubResponse = await response.json();
-         const ph = data.videos.find(v => v.video_id === realId) || data.videos[0];
+        const PROXY = 'https://corsproxy.io/?';
+        const API_URL = `https://www.pornhub.com/webmasters/search?search=${encodeURIComponent(realId)}&thumbsize=large`;
 
-         if (!ph) return undefined;
+        const response = await fetch(PROXY + encodeURIComponent(API_URL));
+        if (!response.ok) throw new Error('PH ID fetch failed');
 
-         const creatorName = ph.pornstars?.[0]?.pornstar_name || 'Pornhub Network';
-         // Fix tags [object Object]
-         const tagsList = Array.isArray(ph.tags) ? ph.tags.map((t: any) => typeof t === 'string' ? t : (t.tag_name || 'Tag')) : [];
+        const data: PornhubResponse = await response.json();
+        const ph = data.videos.find(v => v.video_id === realId) || data.videos[0];
+        if (!ph) return undefined;
 
-         return {
-            id: `ph_${ph.video_id}`,
-            title: ph.title,
-            description: tagsList.join(', ') || `Rating: ${ph.rating}% • Views: ${ph.views}`,
-            thumbnail: ph.default_thumb,
-            videoUrl: '', 
-            embedUrl: `https://www.pornhub.com/embed/${ph.video_id}`,
-            duration: parseDuration(ph.duration),
-            creator: {
-              id: `ph_c_${creatorName.replace(/\s+/g, '_')}`,
-              name: creatorName,
-              avatar: ph.thumbs?.[0]?.src || 'https://www.pornhub.com/favicon.ico',
-              verified: true,
-              tier: 'Standard'
-            },
-            tags: tagsList.map((t, i) => ({ id: `pht_${i}`, label: t })),
-            views: Number(ph.views),
-            quality: 'HD',
-            source: 'Pornhub'
-         };
+        let creatorName = ph.pornstars?.[0]?.pornstar_name;
+        if (!creatorName && ph.categories?.length > 0) {
+          creatorName = ph.categories[0]?.category || (ph.categories[0] as any);
+        }
+        if (!creatorName) creatorName = 'Pornhub Network';
+
+        const tagsList = Array.isArray(ph.tags) ? ph.tags.map((t: any) => (typeof t === 'string' ? t : (t.tag_name || 'Tag'))) : [];
+        const ratingVal = ph.rating_percent ? Number(ph.rating_percent) : (ph.rating ? Number(ph.rating) * 20 : 0);
+
+        return {
+          id: `ph_${ph.video_id}`,
+          title: ph.title,
+          description: tagsList.join(', ') || `Rating: ${ph.rating}% • Views: ${ph.views}`,
+          thumbnail: ph.default_thumb,
+          videoUrl: '',
+          embedUrl: `https://www.pornhub.com/embed/${ph.video_id}`,
+          duration: parseDuration(ph.duration),
+          creator: {
+            id: `ph_c_${creatorName.replace(/\s+/g, '_')}`,
+            name: creatorName,
+            avatar: ph.thumbs?.[0]?.src || 'https://www.pornhub.com/favicon.ico',
+            verified: true,
+            tier: 'Standard'
+          },
+          tags: tagsList.map((t, i) => ({ id: `pht_${i}`, label: t })),
+          views: Number(ph.views),
+          rating: Math.round(ratingVal),
+          quality: 'HD',
+          source: 'Pornhub'
+        };
       } catch (e) {
-        console.error("PH ID fetch error", e);
+        console.error('PH ID fetch error', e);
         return undefined;
       }
     }
@@ -393,49 +404,49 @@ export const TubeAdapter = {
     if (id.startsWith('xv_')) {
       const realId = id.replace('xv_', '');
       try {
-        const TARGET_URL = `https://www.xvideos.com/video${realId}`;
+        const TARGET_URL = `https://www.xvideos.com/video${encodeURIComponent(realId)}`;
         const PROXY_URL = `https://api.allorigins.win/get?url=${encodeURIComponent(TARGET_URL)}`;
-        
+
         const response = await fetch(PROXY_URL);
         if (!response.ok) throw new Error('XVideos ID fetch failed');
-        
+
         const wrapper = await response.json();
         const html = wrapper.contents;
         const parser = new DOMParser();
         const doc = parser.parseFromString(html, 'text/html');
-        
-        // Meta tags extraction
+
         const title = doc.querySelector('meta[property="og:title"]')?.getAttribute('content') || 'Unknown Title';
         const thumbnail = doc.querySelector('meta[property="og:image"]')?.getAttribute('content') || '';
         const durationStr = doc.querySelector('.duration')?.textContent || '0 min';
-        
+
         let duration = 0;
         if (durationStr.includes('h')) duration += parseInt(durationStr) * 3600;
         else if (durationStr.includes('min')) duration += parseInt(durationStr) * 60;
         else duration += parseInt(durationStr);
 
         return {
-           id: `xv_${realId}`,
-           title: title.replace(' - XVIDEOS.COM', ''),
-           description: 'Source: XVideos',
-           thumbnail: thumbnail,
-           videoUrl: '', 
-           embedUrl: `https://www.xvideos.com/embedframe/${realId}`,
-           duration: duration,
-           creator: {
-             id: 'xv_net',
-             name: 'XVideos',
-             avatar: 'https://www.xvideos.com/favicon.ico',
-             verified: false,
-             tier: 'Standard'
-           },
-           tags: [{ id: 'xv_tag', label: 'XVideos' }],
-           views: 0, 
-           quality: 'HD',
-           source: 'XVideos' as any
+          id: `xv_${realId}`,
+          title: title.replace(' - XVIDEOS.COM', ''),
+          description: 'Source: XVideos',
+          thumbnail: thumbnail,
+          videoUrl: '',
+          embedUrl: `https://www.xvideos.com/embedframe/${realId}`,
+          duration: duration,
+          creator: {
+            id: 'xv_net',
+            name: 'XVideos',
+            avatar: 'https://www.xvideos.com/favicon.ico',
+            verified: false,
+            tier: 'Standard'
+          },
+          tags: [{ id: 'xv_tag', label: 'XVideos' }],
+          views: 0,
+          rating: 0,
+          quality: 'HD',
+          source: 'XVideos' as any
         };
       } catch (e) {
-        console.error("XVideos ID fetch error", e);
+        console.error('XVideos ID fetch error', e);
         return undefined;
       }
     }

@@ -66,7 +66,7 @@ interface HomeProps {
   onVideoClick: (v: Video) => void;
   onCreatorClick: (c: Creator) => void;
   userMode: UserMode;
-  currentView: 'home' | 'models' | 'categories' | 'favorites' | 'history';
+  currentView: 'home' | 'models' | 'categories' | 'favorites' | 'history' | 'shorts' | 'admin';
   onOpenLegal: () => void;
   searchQuery: string;
   setSearchQuery: (q: string) => void;
@@ -84,6 +84,8 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, onCreatorClick, userMo
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [activeSource, setActiveSource] = useState('All');
+  const [activeSort, setActiveSort] = useState<'trending' | 'new' | 'best'>('trending');
+  const [activeDuration, setActiveDuration] = useState('All');
   const [showAllCategories, setShowAllCategories] = useState(false);
   
   // Dynamic Category List
@@ -102,11 +104,11 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, onCreatorClick, userMo
 
   // Reset page and videos when filter changes
   useEffect(() => {
-    console.log('[MainContent] Filter changed, resetting...', { userMode, activeCategory, searchQuery, activeSource });
+    console.log('[MainContent] Filter changed, resetting...', { userMode, activeCategory, searchQuery, activeSource, activeSort, activeDuration });
     setPage(1);
     setVideos([]);
     setHasMore(true);
-  }, [userMode, activeCategory, searchQuery, activeSource]);
+  }, [userMode, activeCategory, searchQuery, activeSource, activeSort, activeDuration]);
 
   // Load Data Effect
   useEffect(() => {
@@ -126,7 +128,7 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, onCreatorClick, userMo
       setLoading(true);
       try {
         // 1. Fetch Videos
-        const vids = await VideoService.getVideos(userMode, query, page, activeSource);
+        const vids = await VideoService.getVideos(userMode, query, page, activeSource, activeSort, activeDuration);
         
         if (vids.length === 0) setHasMore(false);
 
@@ -156,23 +158,29 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, onCreatorClick, userMo
       }
     };
     loadData();
-  }, [userMode, activeCategory, currentView, searchQuery, page, activeSource]);
+  }, [userMode, activeCategory, currentView, searchQuery, page, activeSource, activeSort, activeDuration]);
 
   // Render Logic based on View
   if (currentView === 'shorts') {
     return (
         <div className="flex flex-col min-h-screen bg-black">
-            <ShortsView 
-                userMode={userMode} 
-                onVideoClick={handleVideoClick} 
-                onCreatorClick={handleCreatorClick} 
-            />
+            <React.Suspense fallback={<div className="flex items-center justify-center h-screen"><Icon name="Loader2" className="animate-spin text-brand-gold" /></div>}>
+                <ShortsView 
+                    userMode={userMode} 
+                    onVideoClick={onVideoClick} 
+                    onCreatorClick={onCreatorClick} 
+                />
+            </React.Suspense>
         </div>
     );
   }
 
   if (currentView === 'admin') {
-      return <AdminDashboard onExit={() => setCurrentView('home')} />;
+      return (
+        <React.Suspense fallback={<div className="flex items-center justify-center h-screen"><Icon name="Loader2" className="animate-spin text-brand-gold" /></div>}>
+            <AdminDashboard onExit={() => window.location.reload()} />
+        </React.Suspense>
+      );
   }
 
   if (currentView === 'models') {
@@ -260,19 +268,52 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, onCreatorClick, userMo
              {showAllCategories && <div className="fixed inset-0 top-32 z-[-1] bg-black/50 backdrop-blur-sm" onClick={() => setShowAllCategories(false)}></div>}
           </div>
 
-          {/* Source Filter */}
-          <div className="flex items-center gap-2 flex-shrink-0 self-end md:self-auto">
-             <span className="text-xs text-gray-500 font-bold uppercase hidden md:inline">{t('source') || 'Source'}:</span>
-             <select 
-               value={activeSource} 
-               onChange={(e) => setActiveSource(e.target.value)}
-               className="bg-black/40 text-white text-xs font-bold px-3 py-1.5 rounded border border-white/10 focus:border-brand-gold outline-none cursor-pointer"
-             >
-               <option value="All">All Sources</option>
-               <option value="Pornhub">Pornhub</option>
-               <option value="Eporner">Eporner</option>
-               <option value="XVideos">XVideos</option>
-             </select>
+          {/* Filters: Source, Sort, Duration */}
+          <div className="flex items-center gap-2 flex-wrap md:flex-nowrap justify-end">
+             
+             {/* Sort */}
+             <div className="flex items-center gap-2">
+               <span className="text-xs text-gray-500 font-bold uppercase hidden xl:inline">{t('sort') || 'Sort'}:</span>
+               <select 
+                 value={activeSort} 
+                 onChange={(e) => setActiveSort(e.target.value as any)}
+                 className="bg-black/40 text-white text-xs font-bold px-3 py-1.5 rounded border border-white/10 focus:border-brand-gold outline-none cursor-pointer"
+               >
+                 <option value="trending">{t('trending') || 'Trending'}</option>
+                 <option value="new">{t('new') || 'Newest'}</option>
+                 <option value="best">{t('best') || 'Top Rated'}</option>
+               </select>
+             </div>
+
+             {/* Duration */}
+             <div className="flex items-center gap-2">
+               <span className="text-xs text-gray-500 font-bold uppercase hidden xl:inline">{t('duration') || 'Time'}:</span>
+               <select 
+                 value={activeDuration} 
+                 onChange={(e) => setActiveDuration(e.target.value)}
+                 className="bg-black/40 text-white text-xs font-bold px-3 py-1.5 rounded border border-white/10 focus:border-brand-gold outline-none cursor-pointer"
+               >
+                 <option value="All">{t('any') || 'Any'}</option>
+                 <option value="Short">Short (&lt;10m)</option>
+                 <option value="Medium">Medium (10-20m)</option>
+                 <option value="Long">Long (&gt;20m)</option>
+               </select>
+             </div>
+
+             {/* Source */}
+             <div className="flex items-center gap-2">
+               <span className="text-xs text-gray-500 font-bold uppercase hidden xl:inline">{t('source') || 'Source'}:</span>
+               <select 
+                 value={activeSource} 
+                 onChange={(e) => setActiveSource(e.target.value)}
+                 className="bg-black/40 text-white text-xs font-bold px-3 py-1.5 rounded border border-white/10 focus:border-brand-gold outline-none cursor-pointer"
+               >
+                 <option value="All">All Sources</option>
+                 <option value="Pornhub">Pornhub</option>
+                 <option value="Eporner">Eporner</option>
+                 <option value="XVideos">XVideos</option>
+               </select>
+             </div>
           </div>
         </div>
 
@@ -378,7 +419,7 @@ const VelvetApp = () => {
   const [activeCategory, setActiveCategory] = useState('All');
   
   // Navigation State
-  const [currentView, setCurrentView] = useState<'home'|'models'|'categories'|'favorites'|'history'>('home');
+  const [currentView, setCurrentView] = useState<'home'|'models'|'categories'|'favorites'|'history'|'shorts'|'admin'>('home');
 
   // Sync URL params with state
   useEffect(() => {

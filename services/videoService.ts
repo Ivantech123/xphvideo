@@ -23,10 +23,20 @@ function shuffleArray<T>(array: T[]): T[] {
 
 export const VideoService = {
   
-  async getVideos(mode: UserMode, category?: string, page: number = 1, source: string = 'All'): Promise<Video[]> {
+  async getVideos(
+    mode: UserMode,
+    category?: string,
+    page: number = 1,
+    source: string = 'All',
+    sort: 'trending' | 'new' | 'best' = 'trending',
+    durationFilter: string = 'All'
+  ): Promise<Video[]> {
     // 1. Fetch External Data (Real API)
     // We map UserMode/Category to search queries
     let videos: Video[] = [];
+    let query = '';
+    let sortMode: 'trending' | 'new' | 'best' = sort;
+    let filterShorts = false; // Filter for videos under 60 seconds
     
     console.log('[VideoService] getVideos called:', { mode, category, page, source });
     
@@ -44,20 +54,17 @@ export const VideoService = {
         // Translate category if possible
         let mappedCategory = CATEGORY_MAP[rawCategory] || rawCategory;
         
-        let query = mappedCategory || baseQuery;
+        query = mappedCategory || baseQuery;
         
         console.log('[VideoService] Query params:', { baseQuery, rawCategory, mappedCategory, query });
 
         // Detect sort mode and special filters from query
-        let sortMode: 'trending' | 'new' | 'best' = 'trending';
-        let filterShorts = false; // Filter for videos under 60 seconds
-        
         if (query === 'trending' || query === 'В тренде') {
             sortMode = 'trending';
             query = ''; // Clear query to fetch general trending
         } else if (query === 'new' || query === 'Новое') {
             sortMode = 'new';
-            query = '';
+            query = ''; 
         } else if (query === 'best') {
             sortMode = 'best';
             query = '';
@@ -65,7 +72,7 @@ export const VideoService = {
             // Shorts = videos under 1 minute
             filterShorts = true;
             sortMode = 'trending';
-            query = ''; // Fetch trending, then filter by duration
+            query = '';
         }
 
         // If query is empty, use baseQuery or default
@@ -74,7 +81,7 @@ export const VideoService = {
         }
         
         const finalQuery = query || baseQuery || 'popular';
-        console.log('[VideoService] Final query:', finalQuery, 'sortMode:', sortMode, 'filterShorts:', filterShorts);
+        console.log('[VideoService] Final query:', finalQuery, 'sortMode:', sortMode, 'durationFilter:', durationFilter);
 
         // Fetch from all sources in parallel
         if (source === 'All') {
@@ -101,8 +108,10 @@ export const VideoService = {
                 if (xv[i]) videos.push(xv[i]);
             }
             
-            // Sort by recommendation score
-            videos = RecommendationService.sortByRecommendation(videos);
+            // Sort by recommendation score only if "trending" or default
+            if (sortMode === 'trending') {
+                videos = RecommendationService.sortByRecommendation(videos);
+            }
             console.log('[VideoService] Total videos after interleave:', videos.length);
         } else {
             // Single source - fetch directly
@@ -120,10 +129,27 @@ export const VideoService = {
             videos = videos.filter(v => v.duration > 0 && v.duration <= 60);
             console.log('[VideoService] Filtered shorts, remaining:', videos.length);
         }
+
+        // Filter by duration buckets
+        if (durationFilter && durationFilter !== 'All') {
+            if (durationFilter === 'Short') {
+                videos = videos.filter(v => v.duration > 0 && v.duration < 600);
+            } else if (durationFilter === 'Medium') {
+                videos = videos.filter(v => v.duration >= 600 && v.duration <= 1200);
+            } else if (durationFilter === 'Long') {
+                videos = videos.filter(v => v.duration > 1200);
+            }
+            console.log('[VideoService] Duration filter applied:', durationFilter, 'remaining:', videos.length);
+        }
         
     } catch (e) {
         console.error('[VideoService] External API failed:', e);
         videos = []; 
+    }
+
+    // Shuffle if it's a general query to provide variety
+    if (!query && !filterShorts && (sortMode === 'trending' || sortMode === 'best')) {
+        videos = shuffleArray(videos);
     }
 
     console.log('[VideoService] Returning', videos.length, 'videos');
