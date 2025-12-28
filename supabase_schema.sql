@@ -119,8 +119,22 @@ create policy "Admin can delete tickets"
   using (public.is_admin());
 
 -- Search engine: video catalog + Postgres FTS + trigram
-create extension if not exists pg_trgm;
-create extension if not exists unaccent;
+do $$
+begin
+  begin
+    execute 'create extension if not exists pg_trgm';
+  exception
+    when insufficient_privilege then null;
+    when undefined_file then null;
+  end;
+
+  begin
+    execute 'create extension if not exists unaccent';
+  exception
+    when insufficient_privilege then null;
+    when undefined_file then null;
+  end;
+end $$;
 
 create table if not exists public.videos_catalog (
   id text primary key,
@@ -384,3 +398,63 @@ begin
   );
 end;
 $$;
+
+create table if not exists public.legal_documents (
+  id uuid default gen_random_uuid() primary key,
+  slug text not null,
+  lang text not null default 'en',
+  title text,
+  content_html text not null default '',
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  unique (slug, lang)
+);
+
+create index if not exists legal_documents_slug_idx on public.legal_documents (slug);
+create index if not exists legal_documents_updated_at_idx on public.legal_documents (updated_at desc);
+
+drop trigger if exists legal_documents_set_updated_at on public.legal_documents;
+create trigger legal_documents_set_updated_at
+before update on public.legal_documents
+for each row execute procedure public.set_updated_at();
+
+alter table public.legal_documents enable row level security;
+
+drop policy if exists "Lawyer/admin can read legal documents" on public.legal_documents;
+create policy "Lawyer/admin can read legal documents"
+  on public.legal_documents for select
+  using (
+    public.is_admin()
+    or coalesce(auth.jwt() ->> 'email','') = '8272@mail.ru'
+  );
+
+drop policy if exists "Lawyer/admin can insert legal documents" on public.legal_documents;
+create policy "Lawyer/admin can insert legal documents"
+  on public.legal_documents for insert
+  with check (
+    public.is_admin()
+    or coalesce(auth.jwt() ->> 'email','') = '8272@mail.ru'
+  );
+
+drop policy if exists "Lawyer/admin can update legal documents" on public.legal_documents;
+create policy "Lawyer/admin can update legal documents"
+  on public.legal_documents for update
+  using (
+    public.is_admin()
+    or coalesce(auth.jwt() ->> 'email','') = '8272@mail.ru'
+  )
+  with check (
+    public.is_admin()
+    or coalesce(auth.jwt() ->> 'email','') = '8272@mail.ru' git status
+git add -A
+git commit -m "Feat: ExoClick ads + verify file + privacy blur + feed fixes"
+git push origin main
+  );
+
+drop policy if exists "Lawyer/admin can delete legal documents" on public.legal_documents;
+create policy "Lawyer/admin can delete legal documents"
+  on public.legal_documents for delete
+  using (
+    public.is_admin()
+    or coalesce(auth.jwt() ->> 'email','') = '8272@mail.ru'
+  );

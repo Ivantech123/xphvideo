@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Velvet — Legal Editor</title>
+  <meta name="robots" content="noindex,nofollow" />
+  <style>
+    :root { color-scheme: dark; }
+    body { margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans", "Liberation Sans", sans-serif; background: #0b0b0b; color: #eaeaea; }
+    a { color: #d4af37; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .wrap { max-width: 1200px; margin: 0 auto; padding: 18px 14px 60px; }
+    .top { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+    .brand { display: flex; gap: 10px; align-items: center; }
+    .logo { width: 34px; height: 34px; border-radius: 10px; background: #d4af37; color: #000; display: grid; place-items: center; font-weight: 900; }
+    h1 { margin: 0; font-size: 15px; letter-spacing: 0.02em; }
+    .muted { color: #b0b0b0; }
+    .small { font-size: 12px; }
+    .grid { display: grid; grid-template-columns: 360px 1fr; gap: 12px; margin-top: 14px; }
+    @media (max-width: 980px) { .grid { grid-template-columns: 1fr; } }
+    .card { background: #121212; border: 1px solid #262626; border-radius: 14px; overflow: hidden; }
+    .card-h { padding: 12px 12px; border-bottom: 1px solid #252525; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .card-b { padding: 12px; }
+    .btn { background: #1a1a1a; border: 1px solid #303030; color: #eaeaea; padding: 9px 12px; border-radius: 10px; cursor: pointer; font-weight: 700; font-size: 12px; }
+    .btn:hover { border-color: #d4af37; }
+    .btn.primary { background: #d4af37; color: #000; border-color: #d4af37; }
+    .btn.primary:hover { filter: brightness(1.05); }
+    .btn.danger { background: rgba(220,38,38,0.12); border-color: rgba(220,38,38,0.35); }
+    .btn.danger:hover { border-color: rgba(220,38,38,0.8); }
+    input, select { width: 100%; background: #0f0f0f; border: 1px solid #2b2b2b; color: #eaeaea; border-radius: 10px; padding: 10px 10px; font-size: 13px; outline: none; }
+    input:focus, select:focus { border-color: #d4af37; }
+    label { display: block; font-size: 12px; color: #bdbdbd; margin: 10px 0 6px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    @media (max-width: 520px) { .row { grid-template-columns: 1fr; } }
+    .notice { background: rgba(212,175,55,0.08); border: 1px solid rgba(212,175,55,0.25); padding: 10px 12px; border-radius: 12px; font-size: 12px; color: #ddd; }
+    .error { background: rgba(220,38,38,0.10); border: 1px solid rgba(220,38,38,0.30); padding: 10px 12px; border-radius: 12px; font-size: 12px; color: #ffd6d6; }
+    .list { max-height: 70vh; overflow: auto; }
+    .item { padding: 10px 12px; border-top: 1px solid #232323; cursor: pointer; }
+    .item:hover { background: rgba(255,255,255,0.04); }
+    .item.active { background: rgba(212,175,55,0.12); border-left: 3px solid #d4af37; }
+    .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; border: 1px solid #303030; color: #cfcfcf; background: #0f0f0f; }
+    .editor { min-height: 360px; background: #0f0f0f; border: 1px solid #2b2b2b; border-radius: 12px; padding: 12px; outline: none; }
+    .editor:focus { border-color: #d4af37; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 8px; }
+    .toolbar .btn { padding: 7px 10px; }
+    .preview { background: #0f0f0f; border: 1px solid #242424; border-radius: 12px; padding: 12px; }
+    .preview h1, .preview h2, .preview h3 { color: #fff; }
+    .preview p, .preview li { color: #d6d6d6; }
+    .preview a { color: #d4af37; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div class="brand">
+        <div class="logo">V</div>
+        <div>
+          <h1>Velvet — Legal Editor</h1>
+          <div class="muted small">Login required • Saves to Supabase table <code>public.legal_documents</code></div>
+        </div>
+      </div>
+      <div class="muted small" id="sessionLine">Not signed in</div>
+    </div>
+
+    <div id="msg" style="margin-top: 12px;"></div>
+
+    <div id="loginCard" class="card" style="margin-top: 14px;">
+      <div class="card-h">
+        <div style="font-weight: 800;">Sign in</div>
+        <a class="small muted" href="/legal.html" target="_blank" rel="noreferrer">Open legal.html</a>
+      </div>
+      <div class="card-b">
+        <div class="notice">
+          This page is intended for a specific lawyer account. If you don’t have credentials, request them from the site owner.
+        </div>
+        <label>Email</label>
+        <input id="email" type="email" placeholder="8272@mail.ru" autocomplete="username" />
+        <label>Password</label>
+        <input id="password" type="password" placeholder="Password" autocomplete="current-password" />
+        <div style="display:flex; gap:10px; margin-top: 12px; flex-wrap: wrap;">
+          <button class="btn primary" id="btnLogin">Sign in</button>
+          <button class="btn" id="btnForgot">Forgot? (owner resets)</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="app" class="grid" style="display:none;">
+      <div class="card">
+        <div class="card-h">
+          <div style="font-weight: 800;">Documents</div>
+          <button class="btn" id="btnRefresh">Refresh</button>
+        </div>
+        <div class="card-b">
+          <div class="row">
+            <div>
+              <label>New slug</label>
+              <input id="newSlug" placeholder="privacy, terms, dmca, cookies, 2257" />
+            </div>
+            <div>
+              <label>Language</label>
+              <select id="newLang">
+                <option value="en">en</option>
+                <option value="ru">ru</option>
+              </select>
+            </div>
+          </div>
+          <button class="btn" id="btnCreate" style="margin-top: 10px; width: 100%;">Create / Open</button>
+          <div style="height: 10px;"></div>
+          <div class="list" id="docList"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-h">
+          <div>
+            <div style="font-weight: 800;" id="docTitleLine">Editor</div>
+            <div class="muted small" id="docMetaLine">No document selected</div>
+          </div>
+          <div style="display:flex; gap:8px; flex-wrap: wrap;">
+            <button class="btn" id="btnLogout">Logout</button>
+            <button class="btn danger" id="btnDelete">Delete</button>
+            <button class="btn primary" id="btnSave">Save</button>
+          </div>
+        </div>
+        <div class="card-b">
+          <div class="row">
+            <div>
+              <label>Slug</label>
+              <input id="slug" placeholder="privacy" />
+            </div>
+            <div>
+              <label>Language</label>
+              <select id="lang">
+                <option value="en">en</option>
+                <option value="ru">ru</option>
+              </select>
+            </div>
+          </div>
+
+          <label>Title</label>
+          <input id="title" placeholder="Privacy Policy" />
+
+          <label>Toolbar</label>
+          <div class="toolbar">
+            <button class="btn" data-cmd="bold"><b>B</b></button>
+            <button class="btn" data-cmd="italic"><i>I</i></button>
+            <button class="btn" data-cmd="underline"><u>U</u></button>
+            <button class="btn" data-cmd="insertUnorderedList">• List</button>
+            <button class="btn" data-cmd="insertOrderedList">1. List</button>
+            <button class="btn" id="btnLink">Link</button>
+            <button class="btn" id="btnH2">H2</button>
+            <button class="btn" id="btnH3">H3</button>
+            <button class="btn" id="btnP">P</button>
+          </div>
+
+          <label>Content (HTML)</label>
+          <div id="editor" class="editor" contenteditable="true"></div>
+
+          <label>Preview</label>
+          <div id="preview" class="preview"></div>
+
+          <div class="muted small" style="margin-top: 10px;">
+            Tip: this editor saves HTML. You can copy final content into <a href="/legal.html" target="_blank" rel="noreferrer">/legal.html</a> later.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
+
+    // IMPORTANT: these values are public (anon). Security is enforced by RLS + Supabase Auth.
+    const SUPABASE_URL = 'https://odvgciifzxaiojhqenld.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9kdmdjaWlmenhhaW9qaHFlbmxkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTgyODc4MTYsImV4cCI6MjA3Mzg2MzgxNn0.9iR_1RWAOg0uJw058n_DgIOuYFCr_y8zxFVzMLbnwJg';
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    const el = (id) => document.getElementById(id);
+
+    const msgBox = el('msg');
+    const setMsg = (type, text) => {
+      msgBox.innerHTML = '';
+      if (!text) return;
+      const div = document.createElement('div');
+      div.className = type === 'error' ? 'error' : 'notice';
+      div.textContent = text;
+      msgBox.appendChild(div);
+    };
+
+    const loginCard = el('loginCard');
+    const app = el('app');
+    const sessionLine = el('sessionLine');
+
+    const docList = el('docList');
+
+    const slug = el('slug');
+    const lang = el('lang');
+    const title = el('title');
+    const editor = el('editor');
+    const preview = el('preview');
+
+    const docTitleLine = el('docTitleLine');
+    const docMetaLine = el('docMetaLine');
+
+    const newSlug = el('newSlug');
+    const newLang = el('newLang');
+
+    let currentDoc = null;
+
+    const sanitizeSlug = (s) => (s || '').trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+
+    const setViewSignedIn = (user) => {
+      loginCard.style.display = user ? 'none' : 'block';
+      app.style.display = user ? 'grid' : 'none';
+      sessionLine.textContent = user ? `Signed in: ${user.email}` : 'Not signed in';
+    };
+
+    const renderPreview = () => {
+      preview.innerHTML = editor.innerHTML || '';
+    };
+
+    editor.addEventListener('input', () => {
+      renderPreview();
+    });
+
+    document.querySelectorAll('[data-cmd]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const cmd = btn.getAttribute('data-cmd');
+        try { document.execCommand(cmd, false); } catch {}
+        editor.focus();
+        renderPreview();
+      });
+    });
+
+    el('btnLink').addEventListener('click', () => {
+      const url = prompt('Enter URL');
+      if (!url) return;
+      try { document.execCommand('createLink', false, url); } catch {}
+      editor.focus();
+      renderPreview();
+    });
+
+    const wrapSelection = (tag) => {
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0) return;
+      const range = sel.getRangeAt(0);
+      const node = document.createElement(tag);
+      node.appendChild(range.extractContents());
+      range.insertNode(node);
+      sel.removeAllRanges();
+      const r = document.createRange();
+      r.selectNodeContents(node);
+      r.collapse(false);
+      sel.addRange(r);
+      editor.focus();
+      renderPreview();
+    };
+
+    el('btnH2').addEventListener('click', () => wrapSelection('h2'));
+    el('btnH3').addEventListener('click', () => wrapSelection('h3'));
+    el('btnP').addEventListener('click', () => wrapSelection('p'));
+
+    const loadList = async () => {
+      setMsg('', '');
+      docList.innerHTML = '<div class="muted small">Loading…</div>';
+      const { data, error } = await supabase
+        .from('legal_documents')
+        .select('slug,lang,title,updated_at')
+        .order('updated_at', { ascending: false });
+
+      if (error) {
+        docList.innerHTML = '';
+        setMsg('error', error.message);
+        return;
+      }
+
+      docList.innerHTML = '';
+      if (!data || data.length === 0) {
+        docList.innerHTML = '<div class="muted small">No documents yet</div>';
+        return;
+      }
+
+      for (const d of data) {
+        const div = document.createElement('div');
+        div.className = 'item' + (currentDoc && currentDoc.slug === d.slug && currentDoc.lang === d.lang ? ' active' : '');
+        div.innerHTML = `
+          <div style="display:flex; gap:8px; align-items:center; justify-content:space-between;">
+            <div>
+              <div style="font-weight:800; font-size:13px;">${d.title || d.slug}</div>
+              <div class="muted small">${d.slug} • ${d.lang} • ${new Date(d.updated_at).toLocaleString()}</div>
+            </div>
+            <span class="pill">${d.lang}</span>
+          </div>
+        `;
+        div.addEventListener('click', async () => {
+          await openDoc(d.slug, d.lang);
+        });
+        docList.appendChild(div);
+      }
+    };
+
+    const openDoc = async (s, l) => {
+      setMsg('', '');
+      const slugVal = sanitizeSlug(s);
+      const langVal = (l || 'en').toLowerCase();
+
+      const { data, error } = await supabase
+        .from('legal_documents')
+        .select('*')
+        .eq('slug', slugVal)
+        .eq('lang', langVal)
+        .maybeSingle();
+
+      if (error) {
+        setMsg('error', error.message);
+        return;
+      }
+
+      currentDoc = data || { slug: slugVal, lang: langVal, title: '', content_html: '' };
+      slug.value = currentDoc.slug;
+      lang.value = currentDoc.lang;
+      title.value = currentDoc.title || '';
+      editor.innerHTML = currentDoc.content_html || '';
+      renderPreview();
+
+      docTitleLine.textContent = currentDoc.title || currentDoc.slug;
+      docMetaLine.textContent = `${currentDoc.slug} • ${currentDoc.lang}`;
+
+      await loadList();
+    };
+
+    const saveDoc = async () => {
+      setMsg('', '');
+      const slugVal = sanitizeSlug(slug.value);
+      const langVal = (lang.value || 'en').toLowerCase();
+      const titleVal = (title.value || '').trim();
+      const htmlVal = editor.innerHTML || '';
+
+      if (!slugVal) {
+        setMsg('error', 'Slug is required');
+        return;
+      }
+
+      const payload = {
+        slug: slugVal,
+        lang: langVal,
+        title: titleVal,
+        content_html: htmlVal,
+      };
+
+      const { error } = await supabase
+        .from('legal_documents')
+        .upsert(payload, { onConflict: 'slug,lang' });
+
+      if (error) {
+        setMsg('error', error.message);
+        return;
+      }
+
+      currentDoc = payload;
+      docTitleLine.textContent = titleVal || slugVal;
+      docMetaLine.textContent = `${slugVal} • ${langVal}`;
+
+      setMsg('notice', 'Saved');
+      await loadList();
+    };
+
+    const deleteDoc = async () => {
+      setMsg('', '');
+      const slugVal = sanitizeSlug(slug.value);
+      const langVal = (lang.value || 'en').toLowerCase();
+      if (!slugVal) {
+        setMsg('error', 'Select a document first');
+        return;
+      }
+      const ok = confirm(`Delete ${slugVal} (${langVal})?`);
+      if (!ok) return;
+
+      const { error } = await supabase
+        .from('legal_documents')
+        .delete()
+        .eq('slug', slugVal)
+        .eq('lang', langVal);
+
+      if (error) {
+        setMsg('error', error.message);
+        return;
+      }
+
+      currentDoc = null;
+      slug.value = '';
+      title.value = '';
+      editor.innerHTML = '';
+      renderPreview();
+      docTitleLine.textContent = 'Editor';
+      docMetaLine.textContent = 'No document selected';
+
+      setMsg('notice', 'Deleted');
+      await loadList();
+    };
+
+    el('btnSave').addEventListener('click', saveDoc);
+    el('btnDelete').addEventListener('click', deleteDoc);
+    el('btnRefresh').addEventListener('click', loadList);
+
+    el('btnCreate').addEventListener('click', async () => {
+      const s = sanitizeSlug(newSlug.value);
+      const l = (newLang.value || 'en').toLowerCase();
+      if (!s) {
+        setMsg('error', 'Enter slug');
+        return;
+      }
+      await openDoc(s, l);
+    });
+
+    el('btnLogout').addEventListener('click', async () => {
+      await supabase.auth.signOut();
+      setViewSignedIn(null);
+      setMsg('notice', 'Signed out');
+    });
+
+    el('btnLogin').addEventListener('click', async () => {
+      setMsg('', '');
+      const email = (el('email').value || '').trim();
+      const password = (el('password').value || '').trim();
+      if (!email || !password) {
+        setMsg('error', 'Enter email and password');
+        return;
+      }
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        setMsg('error', error.message);
+        return;
+      }
+      setViewSignedIn(data.user);
+      setMsg('notice', 'Signed in');
+      await loadList();
+    });
+
+    el('btnForgot').addEventListener('click', () => {
+      setMsg('notice', 'Password reset is managed by the site owner in Supabase Dashboard.');
+    });
+
+    const init = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setViewSignedIn(user);
+      if (user) await loadList();
+    };
+
+    await init();
+
+    supabase.auth.onAuthStateChange(async (_evt, session) => {
+      const u = session?.user || null;
+      setViewSignedIn(u);
+      if (u) await loadList();
+    });
+  </script>
+</body>
+</html>

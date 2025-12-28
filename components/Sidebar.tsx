@@ -9,15 +9,17 @@ type ViewType = 'home' | 'models' | 'categories' | 'favorites' | 'history' | 'ad
 
 interface SidebarProps {
   isOpen: boolean;
+  isMobile?: boolean;
   currentView: ViewType;
   onChangeView: (view: ViewType) => void;
+  onRequestClose?: () => void;
   onOpenLegal?: () => void;
   onCreatorClick?: (creator: any) => void;
   onSearch: (query: string) => void;
   searchQuery?: string;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentView, onChangeView, onOpenLegal, onCreatorClick, onSearch, searchQuery = '' }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile = false, currentView, onChangeView, onRequestClose, onOpenLegal, onCreatorClick, onSearch, searchQuery = '' }) => {
   const { t } = useLanguage();
   const { user, isAdmin } = useAuth();
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
@@ -53,8 +55,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentView, onChangeV
   }
 
   return (
-    <aside className={`fixed left-0 top-16 bottom-0 bg-brand-bg z-40 overflow-y-auto transition-all duration-300 border-r border-brand-border ${sidebarClass} scrollbar-hide`}>
-      <div className="flex flex-col h-full">
+    <>
+      {isMobile && isOpen && (
+        <div
+          className="fixed inset-0 top-16 z-30 bg-black/60 backdrop-blur-sm md:hidden"
+          onClick={onRequestClose}
+        />
+      )}
+
+      <aside className={`fixed left-0 top-16 bottom-0 bg-brand-bg z-40 overflow-y-auto transition-all duration-300 border-r border-brand-border ${sidebarClass} scrollbar-hide`}>
+        <div className="flex flex-col h-full">
         
         {/* High Value Items */}
         <div className="p-2 space-y-1">
@@ -96,6 +106,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentView, onChangeV
                     onChangeView('shorts'); // Treat shorts as a separate view for TikTok style UI
                     onSearch('');
                 }
+
+                if (isMobile) onRequestClose?.();
               }} 
               className={`w-full flex items-center gap-4 px-3 py-2.5 rounded-lg hover:bg-brand-surface transition ${isActive ? 'bg-brand-surface text-white' : 'text-gray-400'}`}
             >
@@ -115,7 +127,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentView, onChangeV
             return (
               <button 
                 key={item.id} 
-                onClick={() => onChangeView(item.id as ViewType)}
+                onClick={() => {
+                  onChangeView(item.id as ViewType);
+                  if (isMobile) onRequestClose?.();
+                }}
                 className={`w-full flex items-center gap-4 px-3 py-2.5 rounded-lg hover:bg-brand-surface transition ${isActive ? 'bg-brand-surface text-white' : 'text-gray-400'}`}
               >
                 <Icon name={item.icon as any} size={22} className={isActive ? 'text-brand-gold' : ''} />
@@ -153,6 +168,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentView, onChangeV
                                 tier: 'Standard'
                             });
                         }
+                        if (isMobile) onRequestClose?.();
                     }}
                   >
                     {sub.creator_avatar ? (
@@ -170,5 +186,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentView, onChangeV
         )}
       </div>
     </aside>
+    </>
   );
 };
