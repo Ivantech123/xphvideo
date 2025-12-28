@@ -76,7 +76,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentView, onChangeV
             if (item.id === 'home') isActive = currentView === 'home' && !searchQuery;
             else if (item.id === 'trending') isActive = currentView === 'home' && searchQuery === 'trending';
             else if (item.id === 'new') isActive = currentView === 'home' && searchQuery === 'new';
-            else if (item.id === 'shorts') isActive = currentView === 'home' && searchQuery === 'shorts';
+            else if (item.id === 'shorts') isActive = currentView === 'shorts' || (currentView === 'home' && searchQuery === 'shorts');
 
             return (
             <button 
@@ -93,8 +93,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentView, onChangeV
                     onChangeView('home');
                     onSearch('new');
                 } else if (item.id === 'shorts') {
-                    onChangeView('home');
-                    onSearch('shorts');
+                    onChangeView('shorts'); // Treat shorts as a separate view for TikTok style UI
+                    onSearch('');
                 }
               }} 
               className={`w-full flex items-center gap-4 px-3 py-2.5 rounded-lg hover:bg-brand-surface transition ${isActive ? 'bg-brand-surface text-white' : 'text-gray-400'}`}

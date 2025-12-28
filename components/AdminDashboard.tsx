@@ -4,7 +4,11 @@ import { VideoService } from '../services/videoService';
 import { Icon } from '../components/Icon';
 import { useLanguage } from '../contexts/LanguageContext';
 
-export const AdminDashboard: React.FC = () => {
+interface AdminDashboardProps {
+  onExit: () => void;
+}
+
+export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onExit }) => {
   const { t } = useLanguage();
   const [videos, setVideos] = useState<Video[]>([]);
   const [creators, setCreators] = useState<Creator[]>([]);
@@ -17,16 +21,18 @@ export const AdminDashboard: React.FC = () => {
   }, []);
 
   const loadData = async () => {
+    console.log('[AdminDashboard] Loading data...');
     setLoading(true);
     try {
       const [vids, creats] = await Promise.all([
         VideoService.getVideos('General', searchQuery || 'popular'),
         VideoService.getCreators()
       ]);
+      console.log('[AdminDashboard] Data loaded:', { videos: vids.length, creators: creats.length });
       setVideos(vids);
       setCreators(creats);
     } catch (e) {
-      console.error(e);
+      console.error('[AdminDashboard] Failed to load data:', e);
     } finally {
       setLoading(false);
     }
@@ -49,6 +55,9 @@ export const AdminDashboard: React.FC = () => {
             <p className="text-gray-500 mt-1">{t('content_management')}</p>
           </div>
           <div className="flex gap-3">
+             <button onClick={onExit} className="bg-white/5 border border-white/10 px-4 py-2 rounded-lg hover:bg-white/10 transition text-gray-300">
+               Exit
+             </button>
              <button className="bg-brand-surface border border-white/10 px-4 py-2 rounded-lg hover:border-brand-gold transition flex items-center gap-2">
                <Icon name="Settings" size={18} /> {t('settings')}
              </button>

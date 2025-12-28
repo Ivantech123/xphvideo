@@ -157,6 +157,22 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, onCreatorClick, userMo
   }, [userMode, activeCategory, currentView, searchQuery, page, activeSource]);
 
   // Render Logic based on View
+  if (currentView === 'shorts') {
+    return (
+        <div className="flex flex-col min-h-screen bg-black">
+            <ShortsView 
+                userMode={userMode} 
+                onVideoClick={handleVideoClick} 
+                onCreatorClick={handleCreatorClick} 
+            />
+        </div>
+    );
+  }
+
+  if (currentView === 'admin') {
+      return <AdminDashboard onExit={() => setCurrentView('home')} />;
+  }
+
   if (currentView === 'models') {
     return (
       <div className="flex flex-col min-h-screen">
@@ -261,7 +277,12 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, onCreatorClick, userMo
         <div className="relative z-10 space-y-8">
           <section>
             <h2 className="text-2xl font-serif font-bold text-white mb-6 flex items-center gap-2">
-              <span className="text-brand-gold">●</span> {t('recommended')}
+              <span className="text-brand-gold">●</span> 
+              {searchQuery === 'trending' ? t('trending') : 
+               searchQuery === 'new' ? t('new') : 
+               searchQuery ? `${t('results_for')} "${searchQuery}"` : 
+               activeCategory !== 'All' ? activeCategory :
+               t('recommended')}
             </h2>
             
             {/* Skeleton loading state */}
