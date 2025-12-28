@@ -129,9 +129,20 @@ export const TubeAdapter = {
        if (!response.ok) throw new Error('PH Network response was not ok');
 
        const data: PornhubResponse = await response.json();
+       
+       console.log('[TubeAdapter] Pornhub response videos:', data.videos?.length || 0);
 
        return data.videos.map(ph => {
-         const creatorName = ph.pornstars?.[0]?.pornstar_name || 'Pornhub Network';
+         // Use first pornstar name, or first category, or extract from title
+         let creatorName = ph.pornstars?.[0]?.pornstar_name;
+         if (!creatorName && ph.categories?.length > 0) {
+           creatorName = ph.categories[0]?.category || ph.categories[0];
+         }
+         if (!creatorName) {
+           // Extract potential name from title (first capitalized word)
+           const titleWords = ph.title.split(' ').filter(w => w.length > 2);
+           creatorName = titleWords[0] || 'Amateur';
+         }
          // Ensure tags are strings before joining
          const tagsList = Array.isArray(ph.tags) ? ph.tags.map((t: any) => typeof t === 'string' ? t : (t.tag_name || 'Tag')) : [];
          

@@ -73,6 +73,8 @@ export const VideoService = {
         if (!query && !baseQuery) {
              query = 'popular'; // Default fallback
         }
+        
+        console.log('[VideoService] Final query:', query, 'sortMode:', sortMode);
 
         // Prioritize Pornhub (fastest) for quick first paint
         if (source === 'All') {
