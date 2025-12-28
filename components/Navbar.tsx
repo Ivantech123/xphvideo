@@ -4,6 +4,7 @@ import { UserMode } from '../types';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
 import { CATEGORIES_GENERAL, CATEGORIES_HIM, CATEGORIES_HER, CATEGORIES_GAY, CATEGORIES_TRANS, POPULAR_SEARCHES } from '../constants';
+import { RecommendationService } from '../services/recommendationService';
 
 interface NavbarProps {
   onMenuClick: () => void;
@@ -44,6 +45,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [searchValue, setSearchValue] = useState('');
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [history, setHistory] = useState<string[]>([]);
+  const [topTags, setTopTags] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
@@ -56,6 +58,11 @@ export const Navbar: React.FC<NavbarProps> = ({
       } catch (e) {
         console.error('Failed to parse search history', e);
       }
+    }
+    try {
+      setTopTags(RecommendationService.getTopTags(8));
+    } catch {
+      setTopTags([]);
     }
   }, []);
 
@@ -96,25 +103,47 @@ export const Navbar: React.FC<NavbarProps> = ({
   };
 
   useEffect(() => {
-    const trimmed = searchValue.trim().toLowerCase();
-    
-    if (trimmed.length === 0) {
-      // Show history when empty
-      if (history.length > 0) {
-         setSuggestions(history);
-      } else {
-         setSuggestions([]);
-      }
-    } else {
-      // Filter history + tags
-      const historyMatches = history.filter(h => h.toLowerCase().includes(trimmed));
-      const tagMatches = ALL_TAGS.filter(tag => 
-        tag.toLowerCase().includes(trimmed) && !historyMatches.includes(tag)
-      ).slice(0, 8);
-      
-      setSuggestions([...historyMatches, ...tagMatches]);
+    const raw = searchValue.trim().toLowerCase();
+    const q = raw.startsWith('#') ? raw.slice(1) : raw;
+
+    const uniq = new Set<string>();
+    const push = (s: string) => {
+      const v = (s || '').trim();
+      if (!v) return;
+      if (!uniq.has(v)) uniq.add(v);
+    };
+
+    const singleWordTags = Array.from(new Set([
+      ...topTags,
+      ...ALL_TAGS.filter(t => !t.includes(' ')).map(t => t.toLowerCase())
+    ]));
+
+    if (raw.length === 0) {
+      for (const h of history) push(h);
+      for (const tag of singleWordTags.slice(0, 8)) push(`#${tag}`);
+      setSuggestions(Array.from(uniq).slice(0, 12));
+      return;
     }
-  }, [searchValue, history]);
+
+    // History matches
+    for (const h of history) {
+      if (h.toLowerCase().includes(raw)) push(h);
+    }
+
+    // Tag matches (shown as #tag)
+    for (const tag of singleWordTags) {
+      if (tag.toLowerCase().includes(q)) push(`#${tag}`);
+      if (uniq.size >= 12) break;
+    }
+
+    // Category/popular matches
+    for (const item of ALL_TAGS) {
+      if (item.toLowerCase().includes(raw)) push(item);
+      if (uniq.size >= 12) break;
+    }
+
+    setSuggestions(Array.from(uniq).slice(0, 12));
+  }, [searchValue, history, topTags]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -212,9 +241,9 @@ export const Navbar: React.FC<NavbarProps> = ({
             placeholder={t('search_placeholder')}
             className={`w-full rounded-none border-b border-gray-700 bg-transparent pl-10 pr-4 py-2.5 text-sm text-white focus:outline-none transition-all focus:border-brand-gold placeholder-gray-600 ${theme.searchFocus}`}
             value={searchValue}
-            onChange={(e) => setSearchValue(e.target.value)}
+            onChange={(e) => { setSearchValue(e.target.value); setShowSuggestions(true); }}
             onKeyDown={handleSearch}
-            onFocus={() => searchValue.length > 1 && setShowSuggestions(true)}
+            onFocus={() => setShowSuggestions(true)}
           />
           {/* Search Suggestions Dropdown */}
           {showSuggestions && suggestions.length > 0 && (

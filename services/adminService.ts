@@ -15,6 +15,10 @@ export const AdminService = {
     } catch { return []; }
   },
 
+  clearBlocked() {
+    localStorage.setItem(STORAGE_KEYS.BLACKLIST, JSON.stringify([]));
+  },
+
   blockVideo(id: string) {
     const list = this.getBlockedIds();
     if (!list.includes(id)) {
@@ -39,6 +43,20 @@ export const AdminService = {
     try {
       return JSON.parse(localStorage.getItem(STORAGE_KEYS.MANUAL_VIDEOS) || '[]');
     } catch { return []; }
+  },
+
+  clearManualVideos() {
+    localStorage.setItem(STORAGE_KEYS.MANUAL_VIDEOS, JSON.stringify([]));
+  },
+
+  exportManualVideos(): string {
+    return JSON.stringify(this.getManualVideos(), null, 2);
+  },
+
+  importManualVideos(json: string) {
+    const parsed = JSON.parse(json);
+    if (!Array.isArray(parsed)) throw new Error('Invalid format');
+    localStorage.setItem(STORAGE_KEYS.MANUAL_VIDEOS, JSON.stringify(parsed));
   },
 
   addManualVideo(video: Video) {
@@ -71,6 +89,10 @@ export const AdminService = {
     try {
       return JSON.parse(localStorage.getItem(STORAGE_KEYS.EDITS) || '{}');
     } catch { return {}; }
+  },
+
+  clearEdits() {
+    localStorage.setItem(STORAGE_KEYS.EDITS, JSON.stringify({}));
   },
 
   saveVideoEdit(id: string, overrides: Partial<Video>) {

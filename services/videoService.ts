@@ -4,6 +4,39 @@ import { CATEGORY_MAP } from './categoryMap';
 import { RecommendationService } from './recommendationService';
 import { AdminService } from './adminService';
 
+const norm = (s: string) => s.trim().toLowerCase();
+
+const parseSearchFilters = (raw: string) => {
+  const tagFilters: string[] = [];
+  const cleaned = raw.replace(/#[^\s#]+/g, (m) => {
+    const t = norm(m.slice(1));
+    if (t) tagFilters.push(t);
+    return ' ';
+  });
+
+  // Support comma-separated tags: "blonde, anal" => tag filters.
+  // We only treat comma parts that are single tokens (no spaces) as tags.
+  if (cleaned.includes(',')) {
+    const parts = cleaned.split(',').map(p => p.trim()).filter(Boolean);
+    if (parts.length > 1) {
+      const keep: string[] = [];
+      for (const p of parts) {
+        if (!p.includes(' ')) {
+          const t = norm(p);
+          if (t) tagFilters.push(t);
+        } else {
+          keep.push(p);
+        }
+      }
+      const text = keep.join(' ').replace(/\s+/g, ' ').trim();
+      return { text, tagFilters };
+    }
+  }
+
+  const text = cleaned.replace(/\s+/g, ' ').trim();
+  return { text, tagFilters };
+};
+
 // Fisher-Yates shuffle for randomizing videos
 function shuffleArray<T>(array: T[]): T[] {
   const arr = [...array];
@@ -51,6 +84,7 @@ export const VideoService = {
     let query = '';
     let sortMode: 'trending' | 'new' | 'best' = sort;
     let filterShorts = false; // Filter for videos under 60 seconds
+    let tagFilters: string[] = [];
     
     if (import.meta.env.DEV) console.log('[VideoService] getVideos called:', { mode, category, page, source });
 
@@ -71,6 +105,10 @@ export const VideoService = {
         let mappedCategory = CATEGORY_MAP[rawCategory] || rawCategory;
         
         query = mappedCategory || baseQuery;
+
+        const parsed = parseSearchFilters(query);
+        tagFilters = parsed.tagFilters;
+        query = parsed.text || (tagFilters.length > 0 ? tagFilters.join(' ') : query);
         
         if (import.meta.env.DEV) console.log('[VideoService] Query params:', { baseQuery, rawCategory, mappedCategory, query });
 
@@ -99,10 +137,14 @@ export const VideoService = {
         const finalQuery = query || baseQuery || 'popular';
         if (import.meta.env.DEV) console.log('[VideoService] Final query:', finalQuery, 'sortMode:', sortMode, 'durationFilter:', durationFilter);
 
-        cacheKey = JSON.stringify({ mode, finalQuery, page, source, sortMode, durationFilter });
-        const cached = videosCache.get(cacheKey);
-        if (cached && Date.now() - cached.ts < VIDEOS_CACHE_TTL_MS) {
-          return cached.data;
+        // Cache is fine for static sorts, but for personalized 'trending' it makes the feed feel stale.
+        // So we disable cache reads/writes for trending.
+        cacheKey = sortMode === 'trending' ? null : JSON.stringify({ mode, finalQuery, page, source, sortMode, durationFilter });
+        if (cacheKey) {
+          const cached = videosCache.get(cacheKey);
+          if (cached && Date.now() - cached.ts < VIDEOS_CACHE_TTL_MS) {
+            return cached.data;
+          }
         }
 
         // Fetch from all sources in parallel
@@ -178,6 +220,14 @@ export const VideoService = {
             }
             if (import.meta.env.DEV) console.log('[VideoService] Duration filter applied:', durationFilter, 'remaining:', videos.length);
         }
+
+        if (tagFilters.length > 0) {
+            const wanted = new Set(tagFilters.map(norm));
+            videos = videos.filter(v => {
+                const labels = (v.tags || []).map(t => norm((t as any)?.label ?? String(t)));
+                return labels.some(l => wanted.has(l));
+            });
+        }
         
     } catch (e) {
         if (isAbortError(e, signal)) throw e;
@@ -185,8 +235,8 @@ export const VideoService = {
         videos = [];
     }
 
-    // Shuffle if it's a general query to provide variety
-    if (!query && !filterShorts && (sortMode === 'trending' || sortMode === 'best')) {
+    // Shuffle only for non-personalized sorts. For 'trending' we already sort by RecommendationService.
+    if (!query && !filterShorts && sortMode === 'best') {
         videos = shuffleArray(videos);
     }
 

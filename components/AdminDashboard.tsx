@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Video, Creator } from '../types';
 import { VideoService } from '../services/videoService';
 import { AdminService } from '../services/adminService';
 import { Icon } from '../components/Icon';
 import { useLanguage } from '../contexts/LanguageContext';
 import { VideoEditorModal } from './VideoEditorModal';
+import { RecommendationService } from '../services/recommendationService';
 
 interface AdminDashboardProps {
   onExit: () => void;
@@ -17,6 +18,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onExit }) => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'videos' | 'creators'>('videos');
   const [searchQuery, setSearchQuery] = useState('');
+  const [sourceFilter, setSourceFilter] = useState<'All' | 'Pornhub' | 'Eporner' | 'XVideos' | 'Local'>('All');
+  const [settingsOpen, setSettingsOpen] = useState(false);
   
   const [editingVideo, setEditingVideo] = useState<Video | null | undefined>(undefined); // undefined = closed, null = new, object = edit
 
@@ -25,7 +28,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onExit }) => {
     setLoading(true);
     try {
       const [vids, creats] = await Promise.all([
-        VideoService.getVideos('General', searchQuery || 'popular', 1, 'All', 'trending', 'All', signal),
+        VideoService.getVideos('General', searchQuery || 'popular', 1, sourceFilter, 'trending', 'All', signal),
         VideoService.getCreators(signal)
       ]);
       if (signal?.aborted) return;
@@ -46,10 +49,75 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onExit }) => {
     return () => controller.abort();
   }, []);
 
+  useEffect(() => {
+    const controller = new AbortController();
+    loadData(controller.signal);
+    return () => controller.abort();
+  }, [sourceFilter]);
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     const controller = new AbortController();
     loadData(controller.signal);
+  };
+
+  const stats = useMemo(() => {
+    const bySource: Record<string, number> = {};
+    for (const v of videos) {
+      const s = v.source || 'Unknown';
+      bySource[s] = (bySource[s] || 0) + 1;
+    }
+    const manualCount = AdminService.getManualVideos().length;
+    const blockedCount = AdminService.getBlockedIds().length;
+    const editsCount = Object.keys(AdminService.getEdits()).length;
+    const favoritesCount = VideoService.getFavorites().length;
+    const historyCount = VideoService.getHistory().length;
+
+    const sourcesLabel = [
+      bySource['Pornhub'] ? 'PH' : null,
+      bySource['Eporner'] ? 'EP' : null,
+      bySource['XVideos'] ? 'XV' : null,
+      bySource['Local'] ? 'LOCAL' : null
+    ].filter(Boolean).join(' • ') || '—';
+
+    return {
+      bySource,
+      manualCount,
+      blockedCount,
+      editsCount,
+      favoritesCount,
+      historyCount,
+      sourcesLabel
+    };
+  }, [videos]);
+
+  const handleClearRecommendations = () => {
+    if (!window.confirm('Clear recommendation profile (watch history for recommendations)?')) return;
+    RecommendationService.clearBehavior();
+    setSettingsOpen(false);
+  };
+
+  const handleClearSearchHistory = () => {
+    if (!window.confirm('Clear search history?')) return;
+    localStorage.removeItem('velvet_search_history');
+  };
+
+  const handleClearFavorites = () => {
+    if (!window.confirm('Clear favorites?')) return;
+    localStorage.setItem('velvet_favorites', JSON.stringify([]));
+  };
+
+  const handleClearHistory = () => {
+    if (!window.confirm('Clear watch history?')) return;
+    localStorage.setItem('velvet_history', JSON.stringify([]));
+  };
+
+  const handleClearAdminData = () => {
+    if (!window.confirm('Clear admin data (blocked list + edits + manual videos)?')) return;
+    AdminService.clearBlocked();
+    AdminService.clearEdits();
+    AdminService.clearManualVideos();
+    setVideos([]);
   };
 
   const handleDelete = (id: string) => {
@@ -93,7 +161,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onExit }) => {
              <button onClick={onExit} className="bg-white/5 border border-white/10 px-4 py-2 rounded-lg hover:bg-white/10 transition text-gray-300">
                Exit
              </button>
-             <button className="bg-brand-surface border border-white/10 px-4 py-2 rounded-lg hover:border-brand-gold transition flex items-center gap-2">
+             <button onClick={() => setSettingsOpen(true)} className="bg-brand-surface border border-white/10 px-4 py-2 rounded-lg hover:border-brand-gold transition flex items-center gap-2">
                <Icon name="Settings" size={18} /> {t('settings')}
              </button>
              <button onClick={() => setEditingVideo(null)} className="bg-brand-gold text-black px-4 py-2 rounded-lg font-bold hover:bg-yellow-500 transition flex items-center gap-2">
@@ -101,6 +169,50 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onExit }) => {
              </button>
           </div>
         </header>
+
+        {settingsOpen && (
+          <div className="fixed inset-0 z-[70] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="w-full max-w-2xl bg-brand-surface border border-white/10 rounded-2xl overflow-hidden">
+              <div className="p-5 border-b border-white/10 flex items-center justify-between">
+                <div className="flex items-center gap-2 text-white font-bold">
+                  <Icon name="Settings" size={18} className="text-brand-gold" />
+                  {t('settings')}
+                </div>
+                <button onClick={() => setSettingsOpen(false)} className="text-gray-400 hover:text-white">
+                  <Icon name="X" size={20} />
+                </button>
+              </div>
+
+              <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-black/20 border border-white/10 rounded-xl p-4">
+                  <div className="text-xs uppercase tracking-wider text-gray-500 mb-2">Stats</div>
+                  <div className="text-sm text-gray-300 space-y-1">
+                    <div>Manual videos: <span className="text-white font-mono">{stats.manualCount}</span></div>
+                    <div>Blocked IDs: <span className="text-white font-mono">{stats.blockedCount}</span></div>
+                    <div>Edits: <span className="text-white font-mono">{stats.editsCount}</span></div>
+                    <div>Favorites: <span className="text-white font-mono">{stats.favoritesCount}</span></div>
+                    <div>History: <span className="text-white font-mono">{stats.historyCount}</span></div>
+                  </div>
+                </div>
+
+                <div className="bg-black/20 border border-white/10 rounded-xl p-4">
+                  <div className="text-xs uppercase tracking-wider text-gray-500 mb-2">Actions</div>
+                  <div className="flex flex-col gap-2">
+                    <button onClick={handleClearRecommendations} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-200 hover:bg-white/10 transition">Clear recommendations profile</button>
+                    <button onClick={handleClearSearchHistory} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-200 hover:bg-white/10 transition">Clear search history</button>
+                    <button onClick={handleClearFavorites} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-200 hover:bg-white/10 transition">Clear favorites</button>
+                    <button onClick={handleClearHistory} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-200 hover:bg-white/10 transition">Clear watch history</button>
+                    <button onClick={handleClearAdminData} className="bg-red-900/20 border border-red-500/30 rounded-lg px-3 py-2 text-sm text-red-200 hover:bg-red-900/30 transition">Clear admin data</button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-5 border-t border-white/10 flex justify-end gap-3">
+                <button onClick={() => setSettingsOpen(false)} className="px-4 py-2 rounded-lg border border-white/10 hover:bg-white/10 transition text-gray-200">Close</button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {editingVideo !== undefined && (
           <VideoEditorModal 
@@ -111,7 +223,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onExit }) => {
         )}
 
         {/* Stats Row */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-8">
            <div className="bg-brand-surface p-4 rounded-xl border border-white/5">
               <div className="text-gray-500 text-xs uppercase tracking-wider mb-1">{t('fetched_videos')}</div>
               <div className="text-2xl font-mono text-white">{videos.length}</div>
@@ -122,7 +234,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onExit }) => {
            </div>
            <div className="bg-brand-surface p-4 rounded-xl border border-white/5">
               <div className="text-gray-500 text-xs uppercase tracking-wider mb-1">{t('connected_sources')}</div>
-              <div className="text-lg font-bold text-brand-gold mt-1">PH • EP • XV</div>
+              <div className="text-lg font-bold text-brand-gold mt-1">{stats.sourcesLabel}</div>
+           </div>
+           <div className="bg-brand-surface p-4 rounded-xl border border-white/5">
+              <div className="text-gray-500 text-xs uppercase tracking-wider mb-1">Manual</div>
+              <div className="text-2xl font-mono text-white">{stats.manualCount}</div>
+           </div>
+           <div className="bg-brand-surface p-4 rounded-xl border border-white/5">
+              <div className="text-gray-500 text-xs uppercase tracking-wider mb-1">Blocked</div>
+              <div className="text-2xl font-mono text-white">{stats.blockedCount}</div>
            </div>
            <div className="bg-brand-surface p-4 rounded-xl border border-white/5">
               <div className="text-gray-500 text-xs uppercase tracking-wider mb-1">{t('system_status')}</div>
@@ -158,10 +278,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onExit }) => {
                 className="w-full bg-brand-surface border border-white/10 rounded-lg pl-10 pr-4 py-2.5 text-white focus:border-brand-gold focus:outline-none"
               />
            </form>
-           <select className="bg-brand-surface border border-white/10 rounded-lg px-4 py-2 text-gray-300 focus:border-brand-gold outline-none">
-              <option>{t('all_sources')}</option>
-              <option>Pornhub</option>
-              <option>Eporner</option>
+           <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value as any)} className="bg-brand-surface border border-white/10 rounded-lg px-4 py-2 text-gray-300 focus:border-brand-gold outline-none">
+              <option value="All">{t('all_sources')}</option>
+              <option value="Pornhub">Pornhub</option>
+              <option value="Eporner">Eporner</option>
+              <option value="XVideos">XVideos</option>
+              <option value="Local">Local / Manual</option>
            </select>
         </div>
 

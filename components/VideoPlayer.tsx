@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Video } from '../types';
 import { Icon } from './Icon';
 import { AdUnit } from './AdUnit';
@@ -27,6 +27,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose, onVide
   const [relatedVideos, setRelatedVideos] = useState<Video[]>([]);
   const [currentTime, setCurrentTime] = useState(0);
   const videoRef = React.useRef<HTMLVideoElement>(null);
+  const watchStartRef = useRef<number>(Date.now());
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -59,6 +60,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose, onVide
 
     // Track video view for recommendations
     RecommendationService.trackView(video);
+
+    watchStartRef.current = Date.now();
     
     setIsFavorite(VideoService.isFavorite(video.id));
     if (user && video.creator?.id) {
@@ -91,7 +94,15 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose, onVide
 
     loadRelated();
 
-    return () => controller.abort();
+    return () => {
+      try {
+        const directTime = videoRef.current?.currentTime;
+        const approx = (Date.now() - watchStartRef.current) / 1000;
+        const watched = typeof directTime === 'number' && !Number.isNaN(directTime) ? directTime : Math.max(0, approx);
+        RecommendationService.trackExit(video, watched);
+      } catch {}
+      controller.abort();
+    };
   }, [video, user]);
 
   const toggleFav = () => {

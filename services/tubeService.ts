@@ -108,6 +108,22 @@ interface PornhubPornstarResponse {
   pornstars: PornhubPornstar[];
 }
 
+const normTag = (s: string) => s.trim().replace(/\s+/g, ' ').toLowerCase();
+
+const tagsFromLabels = (labels: string[], idPrefix: string): { id: string; label: string }[] => {
+  const uniq = new Map<string, string>();
+  for (const raw of labels) {
+    const trimmed = (raw || '').trim();
+    if (!trimmed) continue;
+    const n = normTag(trimmed);
+    if (!n) continue;
+    if (!uniq.has(n)) uniq.set(n, trimmed);
+  }
+  return Array.from(uniq.entries())
+    .slice(0, 12)
+    .map(([n, label]) => ({ id: `${idPrefix}_${n.replace(/[^a-z0-9]+/g, '_').slice(0, 40)}`, label }));
+};
+
 // Adapter to convert External Data -> Our Internal 'Video' Format
 export const TubeAdapter = {
   
@@ -160,7 +176,7 @@ export const TubeAdapter = {
           verified: false,
           tier: 'Standard'
         },
-        tags: ev.keywords.split(',').map((tag, idx) => ({ id: `tag_${idx}`, label: tag.trim() })),
+        tags: tagsFromLabels(keywords, `ep_${ev.id}`),
         views: ev.views,
         rating: parseFloat(ev.rate) || 0, // Eporner rate is usually percentage string "95.5"
         quality: 'HD', 
@@ -204,6 +220,7 @@ export const TubeAdapter = {
          }
          // Ensure tags are strings before joining
          const tagsList = Array.isArray(ph.tags) ? ph.tags.map((t: any) => typeof t === 'string' ? t : (t.tag_name || 'Tag')) : [];
+        const tags = tagsFromLabels(tagsList, `ph_${ph.video_id}`);
          
          // Normalize rating: prefer rating_percent (0-100), fallback to rating (0-5) * 20
          const ratingVal = ph.rating_percent ? Number(ph.rating_percent) : (ph.rating ? Number(ph.rating) * 20 : 0);
@@ -223,7 +240,7 @@ export const TubeAdapter = {
             verified: true,
             tier: 'Standard'
           },
-          tags: tagsList.map((t, i) => ({ id: `pht_${i}`, label: t })),
+          tags: tags,
           views: Number(ph.views),
           rating: Math.round(ratingVal),
           quality: 'HD',
@@ -332,7 +349,7 @@ export const TubeAdapter = {
               verified: false,
               tier: 'Standard'
             },
-            tags: [{ id: 'xv_tag', label: 'XVideos' }],
+            tags: [{ id: 'xv_tag', label: 'xvideos' }],
             views: 0,
             rating: 0,
             quality: 'HD',
@@ -385,7 +402,7 @@ export const TubeAdapter = {
             verified: false,
             tier: 'Standard'
           },
-          tags: keywords.map((tag, idx) => ({ id: `tag_${idx}`, label: tag })),
+          tags: tagsFromLabels(keywords, `ep_${data.id}`),
           views: data.views,
           rating: parseFloat(data.rate) || 0,
           quality: 'HD',
@@ -419,6 +436,7 @@ export const TubeAdapter = {
 
         const tagsList = Array.isArray(ph.tags) ? ph.tags.map((t: any) => (typeof t === 'string' ? t : (t.tag_name || 'Tag'))) : [];
         const ratingVal = ph.rating_percent ? Number(ph.rating_percent) : (ph.rating ? Number(ph.rating) * 20 : 0);
+        const tags = tagsFromLabels(tagsList, `ph_${ph.video_id}`);
 
         return {
           id: `ph_${ph.video_id}`,
@@ -435,7 +453,7 @@ export const TubeAdapter = {
             verified: true,
             tier: 'Standard'
           },
-          tags: tagsList.map((t, i) => ({ id: `pht_${i}`, label: t })),
+          tags: tags,
           views: Number(ph.views),
           rating: Math.round(ratingVal),
           quality: 'HD',
@@ -483,7 +501,7 @@ export const TubeAdapter = {
             verified: false,
             tier: 'Standard'
           },
-          tags: [{ id: 'xv_tag', label: 'XVideos' }],
+          tags: [{ id: 'xv_tag', label: 'xvideos' }],
           views: 0, 
           quality: 'HD',
           source: 'XVideos' as any
