@@ -140,6 +140,11 @@ export const Navbar: React.FC<NavbarProps> = ({
     localStorage.setItem('velvet_search_history', JSON.stringify(newHistory));
   };
 
+  const clearHistory = () => {
+    localStorage.removeItem('velvet_search_history');
+    setHistory([]);
+  };
+
   const handleSearch = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       addToHistory(searchValue);
