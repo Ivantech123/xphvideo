@@ -239,7 +239,13 @@ export const TubeAdapter = {
          const titleEl = node.querySelector('.title a');
          const title = titleEl?.textContent || 'Untitled';
          const thumbEl = node.querySelector('img');
-         const thumbnail = thumbEl?.getAttribute('data-src') || thumbEl?.src || '';
+         let thumbnail = thumbEl?.getAttribute('data-src') || thumbEl?.src || '';
+         
+         // Fix THUMBNUM placeholder - replace with actual number (1-10)
+         if (thumbnail.includes('THUMBNUM')) {
+           thumbnail = thumbnail.replace('THUMBNUM', '1');
+         }
+         
          const durationEl = node.querySelector('.duration'); // Format "10 min" or "50 sec"
          const durationStr = durationEl?.textContent || '0 min';
          

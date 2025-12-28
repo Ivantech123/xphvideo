@@ -168,6 +168,7 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, onCreatorClick, userMo
   }
 
   if (currentView === 'categories') {
+    console.log('[MainContent] Rendering categories view, categories:', currentCategories);
     return (
        <div className="flex flex-col min-h-screen">
         <div className="p-6 flex-1">
@@ -175,6 +176,8 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, onCreatorClick, userMo
           <CategoryGrid 
             categories={currentCategories} 
             onSelectCategory={(cat) => {
+                console.log('[MainContent] Category selected:', cat);
+                // setActiveCategory wrapper in App.tsx will also switch to 'home' view
                 setActiveCategory(cat);
                 setSearchQuery('');
             }} 
@@ -460,7 +463,13 @@ const VelvetApp = () => {
              <Sidebar 
                isOpen={isSidebarOpen} 
                currentView={currentView}
-               onChangeView={(view) => { setCurrentView(view); setCurrentVideo(null); setCurrentCreator(null); setSearchQuery(''); }}
+               onChangeView={(view) => { 
+                 console.log('[App] onChangeView called with:', view);
+                 setCurrentView(view); 
+                 setCurrentVideo(null); 
+                 setCurrentCreator(null); 
+                 setSearchQuery(''); 
+               }}
                onSearch={setSearchQuery}
                searchQuery={searchQuery}
              />
