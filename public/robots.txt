@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://velvet.run/sitemap.xml
+Host: velvet.run
