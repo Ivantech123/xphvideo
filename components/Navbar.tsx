@@ -5,6 +5,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
 import { CATEGORIES_GENERAL, CATEGORIES_HIM, CATEGORIES_HER, CATEGORIES_GAY, CATEGORIES_TRANS, POPULAR_SEARCHES } from '../constants';
 import { RecommendationService } from '../services/recommendationService';
+import { TicketService } from '../services/ticketService';
 
 interface NavbarProps {
   onMenuClick: () => void;
@@ -47,6 +48,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [history, setHistory] = useState<string[]>([]);
   const [topTags, setTopTags] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [ticketBadge, setTicketBadge] = useState(0);
+  const [ticketToast, setTicketToast] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
 
@@ -65,6 +68,61 @@ export const Navbar: React.FC<NavbarProps> = ({
       setTopTags([]);
     }
   }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    let ch: any = null;
+    let toastTimer: any = null;
+
+    const refreshBadge = async () => {
+      if (!user?.id) return;
+      const key = `velvet_tickets_last_seen_${user.id}`;
+      const lastSeen = Number(localStorage.getItem(key) || '0');
+      const { data } = await TicketService.listMine({ limit: 200 });
+      const unread = (data || []).filter(tk => {
+        const ts = Date.parse(tk.updated_at);
+        return Number.isFinite(ts) && ts > lastSeen;
+      }).length;
+      if (mounted) setTicketBadge(unread);
+    };
+
+    const clearToast = () => {
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = null;
+      setTicketToast(null);
+    };
+
+    if (user?.id) {
+      refreshBadge();
+      ch = TicketService.subscribeMine(user.id, (payload: any) => {
+        if (!mounted) return;
+        try {
+          const ev = payload?.eventType;
+          const newRow = payload?.new;
+          const oldRow = payload?.old;
+          if (ev === 'UPDATE' && newRow?.status && oldRow?.status && newRow.status !== oldRow.status) {
+            setTicketToast(`Ticket status: ${oldRow.status} → ${newRow.status}`);
+            if (toastTimer) clearTimeout(toastTimer);
+            toastTimer = setTimeout(clearToast, 4000);
+          }
+        } catch {}
+        refreshBadge();
+      });
+    } else {
+      setTicketBadge(0);
+      clearToast();
+    }
+
+    const onSeen = () => refreshBadge();
+    window.addEventListener('velvet_tickets_seen', onSeen);
+
+    return () => {
+      mounted = false;
+      window.removeEventListener('velvet_tickets_seen', onSeen);
+      try { ch?.unsubscribe(); } catch {}
+      if (toastTimer) clearTimeout(toastTimer);
+    };
+  }, [user?.id]);
 
   const addToHistory = (query: string) => {
     const trimmed = query.trim();
@@ -300,10 +358,15 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* AUTH BUTTON */}
         <button 
           onClick={user ? (onProfileClick || (() => {})) : onAuthClick}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition border ${user ? 'bg-brand-gold/10 text-brand-gold border-brand-gold/30 hover:bg-brand-gold/20' : 'bg-white/5 text-white border-white/10 hover:bg-white/10'}`}
+          className={`relative flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition border ${user ? 'bg-brand-gold/10 text-brand-gold border-brand-gold/30 hover:bg-brand-gold/20' : 'bg-white/5 text-white border-white/10 hover:bg-white/10'}`}
         >
            <Icon name="User" size={16} />
            <span className="hidden md:inline">{user ? user.email.split('@')[0] : 'Login'}</span>
+           {user && ticketBadge > 0 && (
+             <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] leading-[18px] text-center border border-black">
+               {ticketBadge > 9 ? '9+' : ticketBadge}
+             </span>
+           )}
         </button>
 
         <button 
@@ -371,6 +434,12 @@ export const Navbar: React.FC<NavbarProps> = ({
            <span className="hidden md:inline text-xs font-bold uppercase tracking-wider">Panic</span>
         </button>
       </div>
+
+      {ticketToast && (
+        <div className="fixed top-20 right-4 z-[100] bg-black/80 border border-white/10 text-white text-sm px-4 py-3 rounded-xl shadow-2xl">
+          {ticketToast}
+        </div>
+      )}
     </nav>
   );
 };

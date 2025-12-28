@@ -69,6 +69,13 @@ export const TicketService = {
       .single();
 
     if (error) return { data: null, error: error.message };
+
+    // Best-effort email notification (Edge Function)
+    try {
+      await supabase.functions.invoke('ticket-notify', {
+        body: { event: 'created', ticketId: (data as any)?.id }
+      });
+    } catch {}
     return { data: data as SupportTicket, error: null };
   },
 
@@ -103,6 +110,42 @@ export const TicketService = {
     return { data: (data as SupportTicket[]) || [], error: null };
   },
 
+  async listMine(params?: {
+    limit?: number;
+  }): Promise<{ data: SupportTicket[]; error: string | null }> {
+    if (!supabase) return { data: [], error: 'Supabase not initialized' };
+    const { data: auth } = await supabase.auth.getUser();
+    const user = auth.user;
+    if (!user) return { data: [], error: 'User not logged in' };
+
+    const limit = params?.limit ?? 100;
+    const { data, error } = await supabase
+      .from('support_tickets')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('updated_at', { ascending: false })
+      .limit(limit);
+
+    if (error) return { data: [], error: error.message };
+    return { data: (data as SupportTicket[]) || [], error: null };
+  },
+
+  subscribeMine(userId: string, onEvent: (payload: any) => void) {
+    if (!supabase) return null;
+    const channel = supabase
+      .channel(`support_tickets_user_${userId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'support_tickets', filter: `user_id=eq.${userId}` },
+        (payload) => {
+          try { onEvent(payload); } catch {}
+        }
+      )
+      .subscribe();
+
+    return channel;
+  },
+
   async update(id: string, patch: Partial<Pick<SupportTicket, 'status' | 'admin_notes' | 'resolved_at'>>): Promise<{ data: SupportTicket | null; error: string | null }> {
     if (!supabase) return { data: null, error: 'Supabase not initialized' };
 
@@ -119,6 +162,13 @@ export const TicketService = {
       .single();
 
     if (error) return { data: null, error: error.message };
+
+    // Best-effort email notification (Edge Function)
+    try {
+      await supabase.functions.invoke('ticket-notify', {
+        body: { event: 'updated', ticketId: (data as any)?.id }
+      });
+    } catch {}
     return { data: data as SupportTicket, error: null };
   },
 

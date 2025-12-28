@@ -13,6 +13,7 @@ import { COLLECTIONS as STATIC_COLLECTIONS, CATEGORIES_GENERAL, CATEGORIES_HIM, 
 import { Video, UserMode, Creator, Collection } from './types';
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
 import { VideoService } from './services/videoService';
+import { SearchService } from './services/searchService';
 import { GeoBlock } from './components/GeoBlock';
 import { AuthProvider } from './contexts/AuthContext';
 import { AuthModal } from './components/AuthModal';
@@ -175,21 +176,45 @@ interface HomeProps {
     if (import.meta.env.DEV) console.log(`[MainContent] Loading videos - page: ${page}, query: "${query}", userMode: ${userMode}`);
     setLoading(true);
 
-    VideoService.getVideos(userMode, query, page, activeSource, activeSort, activeDuration, controller.signal)
-      .then((vids) => {
+    (async () => {
+      const limit = 24;
+
+      // If user typed a search query, prefer indexed search via Supabase.
+      if (searchQuery) {
+        try {
+          const { data: indexed, error } = await SearchService.searchVideos(searchQuery, {
+            limit,
+            offset: (page - 1) * limit,
+          });
+
+          if (controller.signal.aborted || requestId !== requestIdRef.current) return;
+
+          // If catalog isn't ready (RPC missing) or empty results, fallback to legacy fetch.
+          if (!error && indexed.length > 0) {
+            if (indexed.length < limit) setHasMore(false);
+            if (page === 1) setVideos(indexed);
+            else setVideos((prev) => [...prev, ...indexed]);
+            return;
+          }
+        } catch {
+          // fallthrough to legacy fetch
+        }
+      }
+
+      try {
+        const vids = await VideoService.getVideos(userMode, query, page, activeSource, activeSort, activeDuration, controller.signal);
         if (controller.signal.aborted || requestId !== requestIdRef.current) return;
         if (vids.length === 0) setHasMore(false);
         if (page === 1) setVideos(vids);
         else setVideos((prev) => [...prev, ...vids]);
-      })
-      .catch(() => {
+      } catch {
         if (controller.signal.aborted || requestId !== requestIdRef.current) return;
         setHasMore(false);
-      })
-      .finally(() => {
+      } finally {
         if (controller.signal.aborted || requestId !== requestIdRef.current) return;
         setLoading(false);
-      });
+      }
+    })();
 
     return () => controller.abort();
   }, [userMode, activeCategory, currentView, searchQuery, page, activeSource, activeSort, activeDuration, currentCategories, setActiveCategory]);

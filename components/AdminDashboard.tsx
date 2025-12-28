@@ -8,6 +8,7 @@ import { VideoEditorModal } from './VideoEditorModal';
 import { RecommendationService } from '../services/recommendationService';
 import { TicketService, SupportTicket, TicketStatus } from '../services/ticketService';
 import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../services/supabase';
 
 interface AdminDashboardProps {
   onExit: () => void;
@@ -30,6 +31,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onExit }) => {
   const [activeTicket, setActiveTicket] = useState<SupportTicket | null>(null);
   const [ticketNotes, setTicketNotes] = useState('');
   const [ticketSaving, setTicketSaving] = useState(false);
+
+  const [catalogSyncing, setCatalogSyncing] = useState(false);
+  const [catalogSyncResult, setCatalogSyncResult] = useState<any>(null);
+  const [catalogSyncError, setCatalogSyncError] = useState<string | null>(null);
+
+  const [catalogStatsLoading, setCatalogStatsLoading] = useState(false);
+  const [catalogStats, setCatalogStats] = useState<any>(null);
+  const [catalogStatsError, setCatalogStatsError] = useState<string | null>(null);
   
   const [editingVideo, setEditingVideo] = useState<Video | null | undefined>(undefined); // undefined = closed, null = new, object = edit
 
@@ -50,6 +59,45 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onExit }) => {
       console.error('[AdminDashboard] Failed to load data:', e);
     } finally {
       if (!signal?.aborted) setLoading(false);
+    }
+  };
+
+  const loadCatalogStats = async () => {
+    setCatalogStatsLoading(true);
+    setCatalogStatsError(null);
+    try {
+      const { data, error } = await supabase.rpc('get_catalog_stats');
+      if (error) setCatalogStatsError(error.message);
+      else setCatalogStats(data);
+    } catch (e: any) {
+      setCatalogStatsError(e?.message || 'Failed to load catalog stats');
+    } finally {
+      setCatalogStatsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!settingsOpen) return;
+    loadCatalogStats();
+  }, [settingsOpen]);
+
+  const handleCatalogSync = async () => {
+    setCatalogSyncing(true);
+    setCatalogSyncError(null);
+    setCatalogSyncResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('catalog-sync', {
+        body: { pages: 1, per_page: 24, sources: ['Eporner', 'Pornhub'] }
+      });
+      if (error) {
+        setCatalogSyncError(error.message);
+      } else {
+        setCatalogSyncResult(data);
+      }
+    } catch (e: any) {
+      setCatalogSyncError(e?.message || 'Failed to sync catalog');
+    } finally {
+      setCatalogSyncing(false);
     }
   };
 
@@ -288,8 +336,45 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onExit }) => {
                 </div>
 
                 <div className="bg-black/20 border border-white/10 rounded-xl p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-xs uppercase tracking-wider text-gray-500">Catalog</div>
+                    <button onClick={loadCatalogStats} disabled={catalogStatsLoading} className="text-xs text-gray-400 hover:text-white disabled:opacity-50">
+                      {catalogStatsLoading ? 'Loading...' : 'Refresh'}
+                    </button>
+                  </div>
+                  {catalogStatsError ? (
+                    <div className="text-xs text-red-300 bg-red-900/20 border border-red-500/30 rounded-lg p-2">{catalogStatsError}</div>
+                  ) : (
+                    <div className="text-sm text-gray-300 space-y-1">
+                      <div>Rows (est): <span className="text-white font-mono">{catalogStats?.estimated_rows ?? '-'}</span></div>
+                      <div>Rows (exact): <span className="text-white font-mono">{catalogStats?.exact_rows ?? '-'}</span></div>
+                      <div>Updated 24h: <span className="text-white font-mono">{catalogStats?.updated_last_24h ?? '-'}</span></div>
+                      <div>Newest: <span className="text-white font-mono">{catalogStats?.newest_updated_at ? new Date(catalogStats.newest_updated_at).toLocaleString() : '-'}</span></div>
+                      <div>Oldest: <span className="text-white font-mono">{catalogStats?.oldest_updated_at ? new Date(catalogStats.oldest_updated_at).toLocaleString() : '-'}</span></div>
+                      <div className="pt-2 text-xs text-gray-500">By source: <span className="text-gray-300 font-mono">{catalogStats?.by_source ? JSON.stringify(catalogStats.by_source) : '{}'}</span></div>
+                      <div className="pt-2 text-xs text-gray-500">Last sync: <span className="text-gray-300 font-mono">{catalogStats?.last_run && catalogStats.last_run !== null ? `${catalogStats.last_run.status} / upserted ${catalogStats.last_run.upserted}` : '-'}</span></div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-black/20 border border-white/10 rounded-xl p-4">
                   <div className="text-xs uppercase tracking-wider text-gray-500 mb-2">Actions</div>
                   <div className="flex flex-col gap-2">
+                    <button onClick={handleCatalogSync} disabled={catalogSyncing} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-200 hover:bg-white/10 transition disabled:opacity-50">
+                      {catalogSyncing ? 'Syncing catalog...' : 'Sync catalog (index search)'}
+                    </button>
+                    {catalogSyncError && (
+                      <div className="text-xs text-red-300 bg-red-900/20 border border-red-500/30 rounded-lg p-2">
+                        {catalogSyncError}
+                      </div>
+                    )}
+                    {catalogSyncResult && (
+                      <div className="text-xs text-gray-300 bg-black/30 border border-white/10 rounded-lg p-2">
+                        Upserted: <span className="text-white font-mono">{catalogSyncResult.upserted ?? '-'}</span> | 
+                        Fetched: <span className="text-white font-mono">{catalogSyncResult.fetched ?? '-'}</span> | 
+                        Errors: <span className="text-white font-mono">{(catalogSyncResult.errors || []).length}</span>
+                      </div>
+                    )}
                     <button onClick={handleClearRecommendations} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-200 hover:bg-white/10 transition">Clear recommendations profile</button>
                     <button onClick={handleClearSearchHistory} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-200 hover:bg-white/10 transition">Clear search history</button>
                     <button onClick={handleClearFavorites} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-200 hover:bg-white/10 transition">Clear favorites</button>

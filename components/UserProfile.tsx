@@ -5,6 +5,7 @@ import { SubscriptionService, Subscription } from '../services/subscriptionServi
 import { VideoService } from '../services/videoService';
 import { Video } from '../types';
 import { supabase } from '../services/supabase';
+import { TicketService, SupportTicket } from '../services/ticketService';
 
 interface UserProfileProps {
   onClose: () => void;
@@ -13,10 +14,15 @@ interface UserProfileProps {
 
 export const UserProfile: React.FC<UserProfileProps> = ({ onClose, onVideoClick }) => {
   const { user, logout } = useAuth();
-  const [activeTab, setActiveTab] = useState<'favorites' | 'history' | 'subscriptions' | 'settings'>('favorites');
+  const [activeTab, setActiveTab] = useState<'favorites' | 'history' | 'subscriptions' | 'tickets' | 'settings'>('favorites');
   const [favorites, setFavorites] = useState<Video[]>([]);
   const [history, setHistory] = useState<Video[]>([]);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+
+  const [tickets, setTickets] = useState<SupportTicket[]>([]);
+  const [ticketsLoading, setTicketsLoading] = useState(false);
+  const [ticketsError, setTicketsError] = useState<string | null>(null);
+  const [activeTicket, setActiveTicket] = useState<SupportTicket | null>(null);
   
   // Settings state
   const [newEmail, setNewEmail] = useState('');
@@ -30,6 +36,53 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onClose, onVideoClick 
     setHistory(VideoService.getHistory());
     SubscriptionService.getSubscriptions().then(setSubscriptions);
   }, []);
+
+  const ticketsSeenKey = user?.id ? `velvet_tickets_last_seen_${user.id}` : null;
+
+  const markTicketsSeen = () => {
+    if (!ticketsSeenKey) return;
+    localStorage.setItem(ticketsSeenKey, String(Date.now()));
+    window.dispatchEvent(new Event('velvet_tickets_seen'));
+  };
+
+  const loadTickets = async () => {
+    if (!user) return;
+    setTicketsLoading(true);
+    setTicketsError(null);
+    try {
+      const { data, error } = await TicketService.listMine({ limit: 200 });
+      if (error) {
+        setTicketsError(error);
+        setTickets([]);
+      } else {
+        setTickets(data);
+      }
+    } catch (e: any) {
+      setTicketsError(e?.message || 'Failed to load tickets');
+      setTickets([]);
+    } finally {
+      setTicketsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab !== 'tickets') return;
+    loadTickets();
+    markTicketsSeen();
+  }, [activeTab, user?.id]);
+
+  useEffect(() => {
+    if (!user) return;
+    const ch = TicketService.subscribeMine(user.id, () => {
+      if (activeTab === 'tickets') {
+        loadTickets();
+        markTicketsSeen();
+      }
+    });
+    return () => {
+      try { ch?.unsubscribe(); } catch {}
+    };
+  }, [user?.id, activeTab]);
 
   const handleLogout = async () => {
     await logout();
@@ -127,6 +180,13 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onClose, onVideoClick 
             Подписки
           </button>
           <button 
+            onClick={() => setActiveTab('tickets')}
+            className={`flex-1 min-w-[100px] py-3 text-sm font-bold uppercase tracking-wider transition ${activeTab === 'tickets' ? 'text-brand-gold border-b-2 border-brand-gold' : 'text-gray-500 hover:text-white'}`}
+          >
+            <Icon name="Inbox" size={16} className="inline mr-2" />
+            Тикеты
+          </button>
+          <button 
             onClick={() => setActiveTab('settings')}
             className={`flex-1 min-w-[100px] py-3 text-sm font-bold uppercase tracking-wider transition ${activeTab === 'settings' ? 'text-brand-gold border-b-2 border-brand-gold' : 'text-gray-500 hover:text-white'}`}
           >
@@ -158,6 +218,98 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onClose, onVideoClick 
                     </div>
                   </div>
                 ))
+              )}
+            </div>
+          )}
+
+          {activeTab === 'tickets' && (
+            <div className="space-y-3">
+              {ticketsLoading ? (
+                <div className="text-center py-12 text-gray-500">
+                  <Icon name="Loader2" size={48} className="mx-auto mb-4 opacity-60 animate-spin" />
+                  Загрузка тикетов...
+                </div>
+              ) : ticketsError ? (
+                <div className="p-4 rounded-lg text-sm bg-red-500/10 text-red-400 border border-red-500/30">
+                  {ticketsError}
+                </div>
+              ) : tickets.length === 0 ? (
+                <div className="text-center py-12 text-gray-500">
+                  <Icon name="Inbox" size={48} className="mx-auto mb-4 opacity-30" />
+                  <p>Тикетов пока нет</p>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs text-gray-500">Всего: {tickets.length}</div>
+                    <button onClick={loadTickets} className="text-xs text-gray-400 hover:text-white">Обновить</button>
+                  </div>
+                  <div className="space-y-2">
+                    {tickets.map(tk => (
+                      <button
+                        key={tk.id}
+                        onClick={() => setActiveTicket(tk)}
+                        className="w-full text-left p-3 rounded-lg border border-white/10 bg-black/20 hover:bg-white/5 transition"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-white font-bold text-sm line-clamp-1">{tk.subject || '(без темы)'}</div>
+                            <div className="text-xs text-gray-500 line-clamp-1">{tk.video_title || tk.video_id || ''}</div>
+                          </div>
+                          <span className={`text-[11px] px-2 py-1 rounded whitespace-nowrap ${
+                            tk.status === 'open' ? 'bg-red-500/10 text-red-300 border border-red-500/20' :
+                            tk.status === 'in_progress' ? 'bg-yellow-500/10 text-yellow-300 border border-yellow-500/20' :
+                            tk.status === 'resolved' ? 'bg-green-500/10 text-green-300 border border-green-500/20' :
+                            'bg-white/5 text-gray-300 border border-white/10'
+                          }`}>{tk.status}</span>
+                        </div>
+                        <div className="text-[11px] text-gray-600 mt-2">Обновлено: {new Date(tk.updated_at).toLocaleString('ru')}</div>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {activeTicket && (
+                <div className="fixed inset-0 z-[110] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+                  <div className="w-full max-w-2xl bg-brand-surface border border-white/10 rounded-2xl overflow-hidden">
+                    <div className="p-5 border-b border-white/10 flex items-center justify-between">
+                      <div className="text-white font-bold flex items-center gap-2">
+                        <Icon name="Inbox" size={18} className="text-brand-gold" />
+                        Тикет
+                      </div>
+                      <button onClick={() => setActiveTicket(null)} className="text-gray-400 hover:text-white">
+                        <Icon name="X" size={20} />
+                      </button>
+                    </div>
+                    <div className="p-5 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="text-lg font-bold text-white">{activeTicket.subject || '(без темы)'}</div>
+                        <span className={`text-xs px-2 py-1 rounded ${
+                          activeTicket.status === 'open' ? 'bg-red-900/30 text-red-200' :
+                          activeTicket.status === 'in_progress' ? 'bg-yellow-900/30 text-yellow-200' :
+                          activeTicket.status === 'resolved' ? 'bg-green-900/30 text-green-200' :
+                          'bg-white/10 text-gray-200'
+                        }`}>{activeTicket.status}</span>
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        Видео: {activeTicket.video_title || activeTicket.video_id || '—'}
+                      </div>
+                      <div className="text-sm text-gray-200 whitespace-pre-wrap">{activeTicket.message || ''}</div>
+                      {activeTicket.admin_notes && (
+                        <div className="mt-4 p-3 rounded-lg bg-white/5 border border-white/10">
+                          <div className="text-xs uppercase tracking-wider text-gray-500 mb-1">Ответ поддержки</div>
+                          <div className="text-sm text-gray-200 whitespace-pre-wrap">{activeTicket.admin_notes}</div>
+                        </div>
+                      )}
+                      <div className="text-[11px] text-gray-600">Создано: {new Date(activeTicket.created_at).toLocaleString('ru')}</div>
+                      <div className="text-[11px] text-gray-600">Обновлено: {new Date(activeTicket.updated_at).toLocaleString('ru')}</div>
+                    </div>
+                    <div className="p-5 border-t border-white/10 flex justify-end">
+                      <button onClick={() => setActiveTicket(null)} className="px-4 py-2 rounded-lg border border-white/10 hover:bg-white/10 transition text-gray-200">Закрыть</button>
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
           )}
