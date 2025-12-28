@@ -6,6 +6,7 @@ import { VideoCard } from './VideoCard';
 import { VideoService } from '../services/videoService';
 import { SubscriptionService } from '../services/subscriptionService';
 import { RecommendationService } from '../services/recommendationService';
+import { TicketService, TicketType } from '../services/ticketService';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -28,6 +29,14 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose, onVide
   const [currentTime, setCurrentTime] = useState(0);
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const watchStartRef = useRef<number>(Date.now());
+
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportType, setReportType] = useState<TicketType>('report');
+  const [reportSubject, setReportSubject] = useState('');
+  const [reportMessage, setReportMessage] = useState('');
+  const [reportSending, setReportSending] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [reportSent, setReportSent] = useState(false);
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -62,6 +71,13 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose, onVide
     RecommendationService.trackView(video);
 
     watchStartRef.current = Date.now();
+
+    setReportOpen(false);
+    setReportSent(false);
+    setReportError(null);
+    setReportType('report');
+    setReportSubject(`Report: ${video.title}`);
+    setReportMessage('');
     
     setIsFavorite(VideoService.isFavorite(video.id));
     if (user && video.creator?.id) {
@@ -104,6 +120,29 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose, onVide
       controller.abort();
     };
   }, [video, user]);
+
+  const submitReport = async () => {
+    setReportError(null);
+    setReportSending(true);
+    try {
+      const { error } = await TicketService.create({
+        type: reportType,
+        subject: reportSubject,
+        message: reportMessage,
+        video,
+        pageUrl: window.location.href
+      });
+      if (error) {
+        setReportError(error);
+      } else {
+        setReportSent(true);
+      }
+    } catch (e: any) {
+      setReportError(e?.message || 'Failed to send');
+    } finally {
+      setReportSending(false);
+    }
+  };
 
   const toggleFav = () => {
     const newVal = VideoService.toggleFavorite(video);
@@ -181,7 +220,106 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose, onVide
            <Icon name={isBlurred ? "EyeOff" : "Eye"} size={14} />
            {isBlurred ? t('privacy_on') : t('privacy_off')}
         </button>
+
+        <button
+          onClick={() => {
+            setReportOpen(true);
+            setReportSent(false);
+            setReportError(null);
+          }}
+          className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition border bg-transparent text-gray-400 border-gray-600 hover:text-white"
+          title="Report"
+        >
+          <Icon name="Flag" size={14} />
+          Report
+        </button>
       </div>
+
+      {reportOpen && (
+        <div className="fixed inset-0 z-[80] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-xl bg-brand-surface border border-white/10 rounded-2xl overflow-hidden">
+            <div className="p-5 border-b border-white/10 flex items-center justify-between">
+              <div className="text-white font-bold flex items-center gap-2">
+                <Icon name="Flag" size={18} className="text-brand-gold" />
+                Report / Ticket
+              </div>
+              <button onClick={() => setReportOpen(false)} className="text-gray-400 hover:text-white">
+                <Icon name="X" size={20} />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-3">
+              {!user && (
+                <div className="text-sm text-yellow-200 bg-yellow-900/20 border border-yellow-500/20 rounded-lg p-3">
+                  Login required to send a ticket.
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <div className="text-xs uppercase tracking-wider text-gray-500 mb-1">Type</div>
+                  <select
+                    value={reportType}
+                    onChange={(e) => setReportType(e.target.value as TicketType)}
+                    className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-gray-200 focus:border-brand-gold outline-none"
+                  >
+                    <option value="report">Report</option>
+                    <option value="bug">Bug</option>
+                    <option value="feedback">Feedback</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <div className="text-xs uppercase tracking-wider text-gray-500 mb-1">Video</div>
+                  <div className="text-sm text-gray-200 bg-black/30 border border-white/10 rounded-lg px-3 py-2 line-clamp-1">{video.title}</div>
+                </div>
+              </div>
+
+              <div>
+                <div className="text-xs uppercase tracking-wider text-gray-500 mb-1">Subject</div>
+                <input
+                  value={reportSubject}
+                  onChange={(e) => setReportSubject(e.target.value)}
+                  className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-gray-200 focus:border-brand-gold outline-none"
+                  placeholder="Subject"
+                />
+              </div>
+
+              <div>
+                <div className="text-xs uppercase tracking-wider text-gray-500 mb-1">Message</div>
+                <textarea
+                  value={reportMessage}
+                  onChange={(e) => setReportMessage(e.target.value)}
+                  className="w-full min-h-[120px] bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-gray-200 focus:border-brand-gold outline-none"
+                  placeholder="Describe the issue..."
+                />
+              </div>
+
+              {reportError && (
+                <div className="text-sm text-red-200 bg-red-900/20 border border-red-500/20 rounded-lg p-3">
+                  {reportError}
+                </div>
+              )}
+              {reportSent && (
+                <div className="text-sm text-green-200 bg-green-900/20 border border-green-500/20 rounded-lg p-3">
+                  Ticket sent.
+                </div>
+              )}
+            </div>
+
+            <div className="p-5 border-t border-white/10 flex justify-end gap-3">
+              <button onClick={() => setReportOpen(false)} className="px-4 py-2 rounded-lg border border-white/10 hover:bg-white/10 transition text-gray-200">Cancel</button>
+              <button
+                disabled={reportSending || !user}
+                onClick={submitReport}
+                className="px-4 py-2 rounded-lg bg-brand-gold text-black font-bold hover:bg-yellow-500 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {reportSending ? 'Sending...' : 'Send'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="max-w-[1700px] mx-auto p-0 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-8 space-y-4">
