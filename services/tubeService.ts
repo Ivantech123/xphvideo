@@ -257,12 +257,19 @@ export const TubeAdapter = {
 
   async fetchPornstars(signal?: AbortSignal): Promise<Creator[]> {
     try {
-       const PROXY = 'https://corsproxy.io/?'; 
        const API_URL = `https://www.pornhub.com/webmasters/pornstars`;
-       
-       const response = await fetch(PROXY + encodeURIComponent(API_URL), { signal });
-       if (!response.ok) throw new Error('PH Pornstars Network response was not ok');
-       const data: PornhubPornstarResponse = await response.json();
+
+       // Best-effort: pornstars endpoint is unstable/blocked; do not break UI.
+       let data: PornhubPornstarResponse;
+       try {
+         const direct = await fetch(API_URL, { signal });
+         if (!direct.ok) throw new Error(`Status ${direct.status}`);
+         data = await direct.json();
+       } catch (e) {
+         if (isAbortError(e, signal)) throw e;
+         const raw = await fetchWithProxy(API_URL, signal);
+         data = JSON.parse(raw);
+       }
        
        return data.pornstars.slice(0, 50).map(p => ({
          id: `star_${p.pornstar_name.replace(/\s+/g, '_')}`,
@@ -277,7 +284,7 @@ export const TubeAdapter = {
        }));
     } catch (error) {
        if (isAbortError(error, signal)) throw error;
-       console.error("Failed to fetch pornstars", error);
+       console.warn("Failed to fetch pornstars", error);
        return [];
     }
   },

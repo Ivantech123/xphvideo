@@ -29,7 +29,9 @@ type CatalogRow = {
 
 const corsHeaders = {
   "access-control-allow-origin": "*",
-  "access-control-allow-headers": "authorization, x-client-info, apikey, content-type",
+  "access-control-allow-headers": "authorization, x-client-info, apikey, content-type, x-requested-with",
+  "access-control-allow-methods": "POST, OPTIONS",
+  "access-control-max-age": "86400",
 };
 
 const json = (status: number, body: unknown) =>
@@ -199,7 +201,7 @@ const fetchXVideosBestEffort = async (query: string, page: number) => {
 };
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";

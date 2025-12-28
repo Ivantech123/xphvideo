@@ -266,7 +266,9 @@ export const VideoService = {
         if (isAbortError(e, signal)) throw e;
         console.warn("Failed to fetch creators", e);
     }
-    return []; 
+    // Cache negative result to avoid spamming a flaky endpoint.
+    creatorsCache = { ts: Date.now(), data: [] };
+    return [];
   },
 
   async getCreatorById(id: string, signal?: AbortSignal): Promise<Creator | undefined> {
