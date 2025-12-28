@@ -119,23 +119,6 @@ create policy "Admin can delete tickets"
   using (public.is_admin());
 
 -- Search engine: video catalog + Postgres FTS + trigram
-do $$
-begin
-  begin
-    execute 'create extension if not exists pg_trgm';
-  exception
-    when insufficient_privilege then null;
-    when undefined_file then null;
-  end;
-
-  begin
-    execute 'create extension if not exists unaccent';
-  exception
-    when insufficient_privilege then null;
-    when undefined_file then null;
-  end;
-end $$;
-
 create table if not exists public.videos_catalog (
   id text primary key,
   source text,
@@ -445,10 +428,7 @@ create policy "Lawyer/admin can update legal documents"
   )
   with check (
     public.is_admin()
-    or coalesce(auth.jwt() ->> 'email','') = '8272@mail.ru' git status
-git add -A
-git commit -m "Feat: ExoClick ads + verify file + privacy blur + feed fixes"
-git push origin main
+    or coalesce(auth.jwt() ->> 'email','') = '8272@mail.ru' 
   );
 
 drop policy if exists "Lawyer/admin can delete legal documents" on public.legal_documents;

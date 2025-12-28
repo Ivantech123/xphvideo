@@ -40,7 +40,7 @@
     .item:hover { background: rgba(255,255,255,0.04); }
     .item.active { background: rgba(212,175,55,0.12); border-left: 3px solid #d4af37; }
     .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; border: 1px solid #303030; color: #cfcfcf; background: #0f0f0f; }
-    .editor { min-height: 360px; background: #0f0f0f; border: 1px solid #2b2b2b; border-radius: 12px; padding: 12px; outline: none; }
+    .editor { min-height: 380px; background: #0f0f0f; border: 1px solid #2b2b2b; border-radius: 12px; padding: 14px; outline: none; font-size: 14px; line-height: 1.6; }
     .editor:focus { border-color: #d4af37; }
     .toolbar { display: flex; flex-wrap: wrap; gap: 8px; }
     .toolbar .btn { padding: 7px 10px; }
@@ -48,6 +48,18 @@
     .preview h1, .preview h2, .preview h3 { color: #fff; }
     .preview p, .preview li { color: #d6d6d6; }
     .preview a { color: #d4af37; }
+    .editor h1, .editor h2, .editor h3 { color: #fff; margin: 14px 0 8px; }
+    .editor p { margin: 10px 0; }
+    .editor ul, .editor ol { margin: 10px 0 12px 22px; }
+    .editor li { margin: 6px 0; }
+    .editor code { background: #0b0b0b; border: 1px solid #242424; padding: 2px 6px; border-radius: 8px; }
+    .split { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 980px) { .split { grid-template-columns: 1fr; } }
+    .status { display:inline-flex; gap:8px; align-items:center; }
+    .dot { width: 8px; height: 8px; border-radius: 999px; background: #444; }
+    .dot.ok { background: #22c55e; }
+    .dot.warn { background: #f59e0b; }
+    .dot.err { background: #ef4444; }
   </style>
 </head>
 <body>
@@ -118,6 +130,10 @@
             <div class="muted small" id="docMetaLine">No document selected</div>
           </div>
           <div style="display:flex; gap:8px; flex-wrap: wrap;">
+            <div class="status" title="Save status" style="margin-right:4px;">
+              <span class="dot" id="saveDot"></span>
+              <span class="muted small" id="saveState">Idle</span>
+            </div>
             <button class="btn" id="btnLogout">Logout</button>
             <button class="btn danger" id="btnDelete">Delete</button>
             <button class="btn primary" id="btnSave">Save</button>
@@ -148,17 +164,28 @@
             <button class="btn" data-cmd="underline"><u>U</u></button>
             <button class="btn" data-cmd="insertUnorderedList">• List</button>
             <button class="btn" data-cmd="insertOrderedList">1. List</button>
+            <button class="btn" data-cmd="undo">Undo</button>
+            <button class="btn" data-cmd="redo">Redo</button>
             <button class="btn" id="btnLink">Link</button>
             <button class="btn" id="btnH2">H2</button>
             <button class="btn" id="btnH3">H3</button>
             <button class="btn" id="btnP">P</button>
+            <button class="btn" id="btnClear">Clear formatting</button>
           </div>
 
-          <label>Content (HTML)</label>
-          <div id="editor" class="editor" contenteditable="true"></div>
-
-          <label>Preview</label>
-          <div id="preview" class="preview"></div>
+          <div class="split">
+            <div>
+              <label>Content (WYSIWYG)</label>
+              <div id="editor" class="editor" contenteditable="true"></div>
+              <div class="muted small" style="margin-top:8px;">
+                Paste is cleaned (plain text) to avoid Word/Google Docs broken markup.
+              </div>
+            </div>
+            <div>
+              <label>Preview</label>
+              <div id="preview" class="preview"></div>
+            </div>
+          </div>
 
           <div class="muted small" style="margin-top: 10px;">
             Tip: this editor saves HTML. You can copy final content into <a href="/legal.html" target="_blank" rel="noreferrer">/legal.html</a> later.
@@ -201,6 +228,9 @@
     const editor = el('editor');
     const preview = el('preview');
 
+    const saveDot = el('saveDot');
+    const saveState = el('saveState');
+
     const docTitleLine = el('docTitleLine');
     const docMetaLine = el('docMetaLine');
 
@@ -208,6 +238,13 @@
     const newLang = el('newLang');
 
     let currentDoc = null;
+    let dirty = false;
+    let autosaveTimer = null;
+
+    const setSaveStatus = (kind, text) => {
+      saveState.textContent = text || '';
+      saveDot.className = 'dot' + (kind ? ` ${kind}` : '');
+    };
 
     const sanitizeSlug = (s) => (s || '').trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
 
@@ -217,12 +254,43 @@
       sessionLine.textContent = user ? `Signed in: ${user.email}` : 'Not signed in';
     };
 
+    const normalizeLinks = (root) => {
+      const links = root.querySelectorAll('a');
+      links.forEach(a => {
+        a.setAttribute('target', '_blank');
+        a.setAttribute('rel', 'noreferrer noopener');
+      });
+    };
+
     const renderPreview = () => {
-      preview.innerHTML = editor.innerHTML || '';
+      const wrapper = document.createElement('div');
+      wrapper.innerHTML = editor.innerHTML || '';
+      normalizeLinks(wrapper);
+      preview.innerHTML = wrapper.innerHTML;
+    };
+
+    const markDirty = () => {
+      dirty = true;
+      setSaveStatus('warn', 'Unsaved changes');
+      if (autosaveTimer) clearTimeout(autosaveTimer);
+      autosaveTimer = setTimeout(() => {
+        if (!dirty) return;
+        if (!slug.value || !sanitizeSlug(slug.value)) return;
+        saveDoc(true);
+      }, 1500);
     };
 
     editor.addEventListener('input', () => {
       renderPreview();
+      markDirty();
+    });
+
+    editor.addEventListener('paste', (e) => {
+      try {
+        e.preventDefault();
+        const text = (e.clipboardData || window.clipboardData)?.getData('text/plain') || '';
+        document.execCommand('insertText', false, text);
+      } catch {}
     });
 
     document.querySelectorAll('[data-cmd]').forEach((btn) => {
@@ -234,33 +302,57 @@
       });
     });
 
-    el('btnLink').addEventListener('click', () => {
-      const url = prompt('Enter URL');
-      if (!url) return;
-      try { document.execCommand('createLink', false, url); } catch {}
+    const applyFormatBlock = (tag) => {
+      try {
+        document.execCommand('formatBlock', false, tag);
+      } catch {}
       editor.focus();
       renderPreview();
-    });
+      markDirty();
+    };
 
-    const wrapSelection = (tag) => {
+    const insertOrWrapLink = (url) => {
+      const safeUrl = String(url || '').trim();
+      if (!safeUrl) return;
       const sel = window.getSelection();
       if (!sel || sel.rangeCount === 0) return;
       const range = sel.getRangeAt(0);
-      const node = document.createElement(tag);
-      node.appendChild(range.extractContents());
-      range.insertNode(node);
+      const a = document.createElement('a');
+      a.href = safeUrl;
+      a.target = '_blank';
+      a.rel = 'noreferrer noopener';
+      const txt = range.toString();
+      a.textContent = txt || safeUrl;
+      range.deleteContents();
+      range.insertNode(a);
       sel.removeAllRanges();
       const r = document.createRange();
-      r.selectNodeContents(node);
-      r.collapse(false);
+      r.setStartAfter(a);
+      r.collapse(true);
       sel.addRange(r);
       editor.focus();
       renderPreview();
+      markDirty();
     };
 
-    el('btnH2').addEventListener('click', () => wrapSelection('h2'));
-    el('btnH3').addEventListener('click', () => wrapSelection('h3'));
-    el('btnP').addEventListener('click', () => wrapSelection('p'));
+    el('btnLink').addEventListener('click', () => {
+      const url = prompt('Enter URL (https://...)');
+      if (!url) return;
+      insertOrWrapLink(url);
+    });
+
+    el('btnH2').addEventListener('click', () => applyFormatBlock('H2'));
+    el('btnH3').addEventListener('click', () => applyFormatBlock('H3'));
+    el('btnP').addEventListener('click', () => applyFormatBlock('P'));
+
+    el('btnClear').addEventListener('click', () => {
+      try {
+        document.execCommand('removeFormat', false);
+      } catch {}
+      editor.focus();
+      renderPreview();
+      markDirty();
+    });
 
     const loadList = async () => {
       setMsg('', '');
@@ -331,15 +423,17 @@
       await loadList();
     };
 
-    const saveDoc = async () => {
-      setMsg('', '');
+    const saveDoc = async (silent = false) => {
+      if (!silent) setMsg('', '');
+      setSaveStatus('warn', silent ? 'Autosaving…' : 'Saving…');
       const slugVal = sanitizeSlug(slug.value);
       const langVal = (lang.value || 'en').toLowerCase();
       const titleVal = (title.value || '').trim();
       const htmlVal = editor.innerHTML || '';
 
       if (!slugVal) {
-        setMsg('error', 'Slug is required');
+        if (!silent) setMsg('error', 'Slug is required');
+        setSaveStatus('err', 'Slug required');
         return;
       }
 
@@ -355,7 +449,8 @@
         .upsert(payload, { onConflict: 'slug,lang' });
 
       if (error) {
-        setMsg('error', error.message);
+        if (!silent) setMsg('error', error.message);
+        setSaveStatus('err', 'Save failed');
         return;
       }
 
@@ -363,7 +458,9 @@
       docTitleLine.textContent = titleVal || slugVal;
       docMetaLine.textContent = `${slugVal} • ${langVal}`;
 
-      setMsg('notice', 'Saved');
+      dirty = false;
+      setSaveStatus('ok', 'Saved');
+      if (!silent) setMsg('notice', 'Saved');
       await loadList();
     };
 
@@ -421,6 +518,12 @@
       setMsg('notice', 'Signed out');
     });
 
+    window.addEventListener('beforeunload', (e) => {
+      if (!dirty) return;
+      e.preventDefault();
+      e.returnValue = '';
+    });
+
     el('btnLogin').addEventListener('click', async () => {
       setMsg('', '');
       const email = (el('email').value || '').trim();
@@ -446,7 +549,10 @@
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       setViewSignedIn(user);
-      if (user) await loadList();
+      if (user) {
+        setSaveStatus('', 'Idle');
+        await loadList();
+      }
     };
 
     await init();
