@@ -51,12 +51,27 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose, onVide
   }, [isMuted]);
 
   useEffect(() => {
+    // Reset states when video changes to prevent leaking state from previous video
+    setIsSubscribed(false);
+    setIsFavorite(false);
+    setRelatedVideos([]);
+    setCurrentTime(0);
+
     // Track video view for recommendations
     RecommendationService.trackView(video);
     
     setIsFavorite(VideoService.isFavorite(video.id));
     if (user && video.creator?.id) {
         SubscriptionService.isSubscribed(video.creator.id).then(setIsSubscribed);
+    }
+
+    // Resume Playback
+    const savedTime = RecommendationService.getWatchTime(video.id);
+    if (savedTime > 5 && savedTime < video.duration - 10) {
+        setCurrentTime(savedTime);
+        if (videoRef.current) {
+            videoRef.current.currentTime = savedTime;
+        }
     }
     
     // Fetch related videos based on tags or title
@@ -97,15 +112,25 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose, onVide
     }
   };
 
-  // Track watch time periodically
+  // Track watch time periodically (for direct videos) AND approximate for embeds
   useEffect(() => {
+    // Start time for session duration
+    const startTime = Date.now();
+    
     const interval = setInterval(() => {
-      if (currentTime > 0) {
-        RecommendationService.trackWatchTime(video.id, currentTime);
+      // If direct video, use actual current time
+      if (videoRef.current && !videoRef.current.paused) {
+         RecommendationService.trackWatchTime(video.id, videoRef.current.currentTime);
+      } else if (video.embedUrl && !document.hidden) {
+         // Approximation for embeds: if window active, assume watching
+         // We can't know exact seek position, but we can track total engagement
+         const elapsed = (Date.now() - startTime) / 1000;
+         RecommendationService.trackWatchTime(video.id, elapsed);
       }
-    }, 10000); // Save every 10 seconds
+    }, 5000); // Check every 5 seconds
+
     return () => clearInterval(interval);
-  }, [video.id, currentTime]);
+  }, [video.id, video.embedUrl]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

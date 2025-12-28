@@ -64,10 +64,14 @@ interface PornhubPornstarResponse {
 export const TubeAdapter = {
   
   // EPORNER API (Documentation: https://www.eporner.com/api/v2/)
-  async fetchEporner(query: string = '4k', limit: number = 20, page: number = 1): Promise<Video[]> {
+  async fetchEporner(query: string = '4k', limit: number = 20, page: number = 1, sort: 'trending' | 'new' | 'best' = 'trending'): Promise<Video[]> {
     try {
+      let order = 'top-weekly';
+      if (sort === 'new') order = 'latest';
+      if (sort === 'best') order = 'top-monthly'; // or top-alltime
+
       // Use allorigins proxy which wraps response in JSON
-      const API_URL = `https://www.eporner.com/api/v2_video/search/?query=${encodeURIComponent(query)}&per_page=${limit}&page=${page}&thumbsize=big&order=top-weekly&json=json`;
+      const API_URL = `https://www.eporner.com/api/v2_video/search/?query=${encodeURIComponent(query)}&per_page=${limit}&page=${page}&thumbsize=big&order=${order}&json=json`;
       const PROXY_URL = `https://api.allorigins.win/get?url=${encodeURIComponent(API_URL)}`;
       
       const response = await fetch(PROXY_URL);
@@ -112,10 +116,14 @@ export const TubeAdapter = {
   },
 
   // PORNHUB API
-  async fetchPornhub(query: string = 'popular', page: number = 1): Promise<Video[]> {
+  async fetchPornhub(query: string = 'popular', page: number = 1, sort: 'trending' | 'new' | 'best' = 'trending'): Promise<Video[]> {
     try {
        const PROXY = 'https://corsproxy.io/?'; 
-       const API_URL = `https://www.pornhub.com/webmasters/search?search=${encodeURIComponent(query)}&page=${page}&thumbsize=large`;
+       let ordering = 'mostviewed'; // trending/default
+       if (sort === 'new') ordering = 'newest';
+       if (sort === 'best') ordering = 'rating';
+
+       const API_URL = `https://www.pornhub.com/webmasters/search?search=${encodeURIComponent(query)}&page=${page}&thumbsize=large&ordering=${ordering}`;
        
        const response = await fetch(PROXY + encodeURIComponent(API_URL));
        if (!response.ok) throw new Error('PH Network response was not ok');
@@ -187,10 +195,15 @@ export const TubeAdapter = {
   },
 
   // XVIDEOS API (Scraper via Proxy)
-  async fetchXVideos(query: string = 'best', page: number = 1): Promise<Video[]> {
+  async fetchXVideos(query: string = 'best', page: number = 1, sort: 'trending' | 'new' | 'best' = 'trending'): Promise<Video[]> {
     try {
       // XVideos search url. Page parameter is 'p'
-      const TARGET_URL = `https://www.xvideos.com/?k=${encodeURIComponent(query)}&p=${page}&sort=relevance`;
+      // Sort: relevance (default), uploaddate (new), rating (best), views (trending?)
+      let sortParam = 'relevance';
+      if (sort === 'new') sortParam = 'uploaddate';
+      if (sort === 'best') sortParam = 'rating';
+      
+      const TARGET_URL = `https://www.xvideos.com/?k=${encodeURIComponent(query)}&p=${page}&sort=${sortParam}`;
       const PROXY_URL = `https://api.allorigins.win/get?url=${encodeURIComponent(TARGET_URL)}`;
       
       const response = await fetch(PROXY_URL);
@@ -262,6 +275,9 @@ export const TubeAdapter = {
         const data: EpornerVideo = JSON.parse(wrapper.contents);
         
         // Map single object
+        const keywords = data.keywords?.split(',').map(k => k.trim()).filter(k => k.length > 0) || [];
+        const pseudoAuthor = keywords[0] || 'Eporner';
+
         return {
             id: `ep_${data.id}`,
             title: data.title,
@@ -271,10 +287,10 @@ export const TubeAdapter = {
             embedUrl: data.embed.match(/src="([^"]+)"/)?.[1] || '',
             duration: data.length_sec,
             creator: {
-              id: 'eporner',
-              name: 'Eporner Network',
+              id: `ep_${pseudoAuthor.replace(/\s+/g, '_')}`,
+              name: pseudoAuthor,
               avatar: 'https://www.eporner.com/favicon.ico',
-              verified: true,
+              verified: false,
               tier: 'Standard'
             },
             tags: data.keywords.split(',').map((tag, idx) => ({ id: `tag_${idx}`, label: tag.trim() })),

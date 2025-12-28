@@ -18,6 +18,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import { AuthModal } from './components/AuthModal';
 import { ProfileView } from './components/ProfileView';
 import { UserProfile } from './components/UserProfile';
+import { AdUnit } from './components/AdUnit';
 
 // --- NEW PAGES (Internal Components for cleaner file) ---
 
@@ -272,7 +273,17 @@ const MainContent: React.FC<HomeProps> = ({ onVideoClick, onCreatorClick, userMo
             )}
 
             <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-8 ${loading && videos.length === 0 ? 'hidden' : ''}`}>
-              {videos.map(video => <VideoCard key={video.id} video={video} onClick={() => onVideoClick(video)} onCreatorClick={onCreatorClick} />)}
+              {videos.map((video, index) => (
+                <React.Fragment key={video.id}>
+                  <VideoCard video={video} onClick={() => onVideoClick(video)} onCreatorClick={onCreatorClick} />
+                  {/* Insert Ad every 12 videos */}
+                  {(index + 1) % 12 === 0 && (
+                    <div className="col-span-full py-4">
+                      <AdUnit size="banner" label={t('ad')} className="w-full" />
+                    </div>
+                  )}
+                </React.Fragment>
+              ))}
             </div>
 
             {loading && (
@@ -451,6 +462,7 @@ const VelvetApp = () => {
                currentView={currentView}
                onChangeView={(view) => { setCurrentView(view); setCurrentVideo(null); setCurrentCreator(null); setSearchQuery(''); }}
                onSearch={setSearchQuery}
+               searchQuery={searchQuery}
              />
 
              <main className={`pt-16 transition-all duration-300 ${isSidebarOpen ? 'md:ml-60' : 'md:ml-20'}`}>

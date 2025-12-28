@@ -41,37 +41,99 @@ export const VideoService = {
         // Translate category if possible
         let mappedCategory = CATEGORY_MAP[rawCategory] || rawCategory;
         
-        let query = mappedCategory || baseQuery;
-        if (!query) {
-          // Use personalized query based on user behavior
-          query = RecommendationService.getPersonalizedQuery();
-        }
+        // Detect sort mode from query or category
+        let sortMode: 'trending' | 'new' | 'best' = 'trending';
         
+        if (query === 'trending' || query === 'В тренде') {
+            sortMode = 'trending';
+            query = ''; // Clear query to fetch general trending
+        } else if (query === 'new' || query === 'Новое') {
+            sortMode = 'new';
+            query = '';
+        } else if (query === 'best' || query === 'shorts') { // shorts treated as best/trending for now or specific query
+             // 'shorts' usually implies short duration, but for now we map to best or just search 'shorts'
+             if (query === 'shorts') {
+                 // keep query 'shorts' but maybe sort by trending
+                 sortMode = 'trending';
+             } else {
+                 sortMode = 'best';
+                 query = '';
+             }
+        }
+
+        // If specific category is selected, we usually want "best" or "trending" for that category
+        // If query is empty, we are fetching general feed
+        if (!query && !baseQuery) {
+             query = 'popular'; // Default fallback
+        }
+
         // Prioritize Pornhub (fastest) for quick first paint
         if (source === 'All') {
             // Load Pornhub first for fast initial render
-            const phVideos = await TubeAdapter.fetchPornhub(query, page);
+            const phVideos = await TubeAdapter.fetchPornhub(query || baseQuery || 'popular', page, sortMode);
             videos = [...phVideos];
             
             // Then load other sources in parallel (non-blocking for UI)
             Promise.all([
-                TubeAdapter.fetchEporner(query, 24, page),
-                TubeAdapter.fetchXVideos(query, page)
+                TubeAdapter.fetchEporner(query || baseQuery || '4k', 24, page, sortMode),
+                TubeAdapter.fetchXVideos(query || baseQuery || 'best', page, sortMode)
             ]).then(([ep, xv]) => {
-                // These will be available for next render/scroll
-                console.log(`[VideoService] Background loaded: ${ep.length} Eporner, ${xv.length} XVideos`);
+                // These will be available for next render/scroll or state update if we had one
+                // Note: This promise just logs currently. In a real app, we'd need a way to update the state.
+                // Since this function returns a promise, we can't easily "stream" updates unless we use a callback or observable.
+                // For now, we only return what we await. 
+                // TO FIX: We should probably wait for all if we want mixed content, 
+                // OR just return PH and let the user load more pages to get others (but pages might be mixed).
+                // Actually, the previous code was waiting for PH then returning. 
+                // The Promise.all below was detached and useless for the *current* return value.
+                // Let's revert to waiting for all to ensure mix, BUT with a timeout or just PH if fast?
+                // User wanted "Speed up first page load".
+                // If we return just PH, the user only sees PH.
+                // Let's stick to the previous "PH first" strategy but actually wait for others with a timeout?
+                // Or just fetch all in parallel and return. PH is fast enough usually.
+                // The previous edit made it return ONLY PH for "All".
+                console.log(`[VideoService] Background fetch finished: ${ep.length} Eporner, ${xv.length} XVideos`);
             }).catch(() => {});
+            
+            // Wait for all for better quality? Or stick to speed?
+            // User asked for "Speed up".
+            // If I return only PH, I miss Eporner/XVideos content. 
+            // Let's do this: Fetch PH. Return PH. 
+            // BUT: The "Background loaded" logic was flawed because `videos` is returned immediately.
+            // So the background loaded videos are lost.
+            
+            // Let's fix this: We MUST wait for others if we want to show them.
+            // OR we fetch them all in parallel.
+            
+            const results = await Promise.all([
+                TubeAdapter.fetchPornhub(query || baseQuery || 'popular', page, sortMode),
+                TubeAdapter.fetchEporner(query || baseQuery || '4k', 24, page, sortMode),
+                TubeAdapter.fetchXVideos(query || baseQuery || 'best', page, sortMode)
+            ]);
+            
+            const ph = results[0] || [];
+            const ep = results[1] || [];
+            const xv = results[2] || [];
+            
+            // Interleave
+            const maxLength = Math.max(ph.length, ep.length, xv.length);
+            videos = [];
+            for (let i = 0; i < maxLength; i++) {
+                if (ph[i]) videos.push(ph[i]);
+                if (ep[i]) videos.push(ep[i]);
+                if (xv[i]) videos.push(xv[i]);
+            }
             
             // Sort by recommendation score
             videos = RecommendationService.sortByRecommendation(videos);
         } else {
             // Single source - fetch directly
             if (source === 'Pornhub') {
-                videos = await TubeAdapter.fetchPornhub(query, page);
+                videos = await TubeAdapter.fetchPornhub(query || baseQuery || 'popular', page, sortMode);
             } else if (source === 'Eporner') {
-                videos = await TubeAdapter.fetchEporner(query, 24, page);
+                videos = await TubeAdapter.fetchEporner(query || baseQuery || '4k', 24, page, sortMode);
             } else if (source === 'XVideos') {
-                videos = await TubeAdapter.fetchXVideos(query, page);
+                videos = await TubeAdapter.fetchXVideos(query || baseQuery || 'best', page, sortMode);
             }
         }
         

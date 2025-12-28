@@ -70,6 +70,12 @@ export const RecommendationService = {
     saveBehavior(behavior);
   },
   
+  // Get saved watch time for a video
+  getWatchTime(videoId: string): number {
+    const behavior = getBehavior();
+    return behavior.watchTime[videoId] || 0;
+  },
+  
   // Get top tags user prefers
   getTopTags(limit: number = 5): string[] {
     const behavior = getBehavior();

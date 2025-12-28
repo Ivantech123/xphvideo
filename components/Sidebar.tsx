@@ -3,6 +3,7 @@ import { Icon } from './Icon';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
 import { SubscriptionService, Subscription } from '../services/subscriptionService';
+import { AdUnit } from './AdUnit';
 
 type ViewType = 'home' | 'models' | 'categories' | 'favorites' | 'history' | 'admin';
 
@@ -13,9 +14,10 @@ interface SidebarProps {
   onOpenLegal?: () => void;
   onCreatorClick?: (creator: any) => void;
   onSearch: (query: string) => void;
+  searchQuery?: string;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentView, onChangeView, onOpenLegal, onCreatorClick, onSearch }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentView, onChangeView, onOpenLegal, onCreatorClick, onSearch, searchQuery = '' }) => {
   const { t } = useLanguage();
   const { user, isAdmin } = useAuth();
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
@@ -69,7 +71,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentView, onChangeV
 
         {/* Main Menu */}
         <div className="px-2 space-y-1">
-          {MENU_ITEMS.map((item) => (
+          {MENU_ITEMS.map((item) => {
+            let isActive = false;
+            if (item.id === 'home') isActive = currentView === 'home' && !searchQuery;
+            else if (item.id === 'trending') isActive = currentView === 'home' && searchQuery === 'trending';
+            else if (item.id === 'new') isActive = currentView === 'home' && searchQuery === 'new';
+            else if (item.id === 'shorts') isActive = currentView === 'home' && searchQuery === 'shorts';
+
+            return (
             <button 
               key={item.id} 
               onClick={() => {
@@ -88,12 +97,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentView, onChangeV
                     onSearch('shorts');
                 }
               }} 
-              className={`w-full flex items-center gap-4 px-3 py-2.5 rounded-lg hover:bg-brand-surface transition ${currentView === 'home' && item.id === 'home' ? 'bg-brand-surface text-white' : 'text-gray-400'}`}
+              className={`w-full flex items-center gap-4 px-3 py-2.5 rounded-lg hover:bg-brand-surface transition ${isActive ? 'bg-brand-surface text-white' : 'text-gray-400'}`}
             >
-              <Icon name={item.icon as any} size={22} className={currentView === 'home' && item.id === 'home' ? 'text-white' : 'text-gray-400'} />
+              <Icon name={item.icon as any} size={22} className={isActive ? 'text-white' : 'text-gray-400'} />
               <span className={`text-sm font-medium ${!isOpen && 'md:hidden'}`}>{item.label}</span>
             </button>
-          ))}
+            );
+          })}
         </div>
 
         <div className="h-px bg-brand-border mx-3 my-2" />
@@ -113,6 +123,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, currentView, onChangeV
               </button>
             )
           })}
+        </div>
+
+        <div className="h-px bg-brand-border mx-3 my-2" />
+
+        {/* Ad Unit */}
+        <div className="px-2 py-2">
+           <AdUnit size="sidebar" className="w-full" label={t('ad')} />
         </div>
 
         <div className="h-px bg-brand-border mx-3 my-2" />
