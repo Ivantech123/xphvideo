@@ -27,6 +27,9 @@ export const VideoService = {
     // 1. Fetch External Data (Real API)
     // We map UserMode/Category to search queries
     let videos: Video[] = [];
+    
+    console.log('[VideoService] getVideos called:', { mode, category, page, source });
+    
     try {
         // Map 'Him', 'Her' etc to base search terms if no specific category is selected
         let baseQuery = '';
@@ -41,6 +44,10 @@ export const VideoService = {
         // Translate category if possible
         let mappedCategory = CATEGORY_MAP[rawCategory] || rawCategory;
         
+        let query = mappedCategory || baseQuery;
+        
+        console.log('[VideoService] Query params:', { baseQuery, rawCategory, mappedCategory, query });
+
         // Detect sort mode from query or category
         let sortMode: 'trending' | 'new' | 'best' = 'trending';
         
@@ -105,15 +112,20 @@ export const VideoService = {
             // Let's fix this: We MUST wait for others if we want to show them.
             // OR we fetch them all in parallel.
             
+            const finalQuery = query || baseQuery || 'popular';
+            console.log('[VideoService] Fetching from all sources with query:', finalQuery, 'sortMode:', sortMode);
+            
             const results = await Promise.all([
-                TubeAdapter.fetchPornhub(query || baseQuery || 'popular', page, sortMode),
-                TubeAdapter.fetchEporner(query || baseQuery || '4k', 24, page, sortMode),
-                TubeAdapter.fetchXVideos(query || baseQuery || 'best', page, sortMode)
+                TubeAdapter.fetchPornhub(finalQuery, page, sortMode).catch(e => { console.error('[VideoService] Pornhub fetch error:', e); return []; }),
+                TubeAdapter.fetchEporner(finalQuery, 24, page, sortMode).catch(e => { console.error('[VideoService] Eporner fetch error:', e); return []; }),
+                TubeAdapter.fetchXVideos(finalQuery, page, sortMode).catch(e => { console.error('[VideoService] XVideos fetch error:', e); return []; })
             ]);
             
             const ph = results[0] || [];
             const ep = results[1] || [];
             const xv = results[2] || [];
+            
+            console.log('[VideoService] Fetched videos:', { pornhub: ph.length, eporner: ep.length, xvideos: xv.length });
             
             // Interleave
             const maxLength = Math.max(ph.length, ep.length, xv.length);
@@ -126,6 +138,7 @@ export const VideoService = {
             
             // Sort by recommendation score
             videos = RecommendationService.sortByRecommendation(videos);
+            console.log('[VideoService] Total videos after interleave:', videos.length);
         } else {
             // Single source - fetch directly
             if (source === 'Pornhub') {
@@ -138,10 +151,11 @@ export const VideoService = {
         }
         
     } catch (e) {
-        console.warn("External API failed", e);
+        console.error('[VideoService] External API failed:', e);
         videos = []; 
     }
 
+    console.log('[VideoService] Returning', videos.length, 'videos');
     return videos;
   },
 

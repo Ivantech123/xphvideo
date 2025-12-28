@@ -196,6 +196,7 @@ export const TubeAdapter = {
 
   // XVIDEOS API (Scraper via Proxy)
   async fetchXVideos(query: string = 'best', page: number = 1, sort: 'trending' | 'new' | 'best' = 'trending'): Promise<Video[]> {
+    console.log('[TubeAdapter] fetchXVideos called:', { query, page, sort });
     try {
       // XVideos search url. Page parameter is 'p'
       // Sort: relevance (default), uploaddate (new), rating (best), views (trending?)
@@ -206,8 +207,12 @@ export const TubeAdapter = {
       const TARGET_URL = `https://www.xvideos.com/?k=${encodeURIComponent(query)}&p=${page}&sort=${sortParam}`;
       const PROXY_URL = `https://api.allorigins.win/get?url=${encodeURIComponent(TARGET_URL)}`;
       
+      console.log('[TubeAdapter] XVideos URL:', PROXY_URL);
       const response = await fetch(PROXY_URL);
-      if (!response.ok) throw new Error('XVideos fetch failed');
+      if (!response.ok) {
+        console.error('[TubeAdapter] XVideos response not ok:', response.status);
+        throw new Error('XVideos fetch failed');
+      }
       
       const wrapper = await response.json();
       const html = wrapper.contents;
