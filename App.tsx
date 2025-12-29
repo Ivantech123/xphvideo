@@ -491,7 +491,8 @@ const VelvetApp = () => {
   if (import.meta.env.DEV) console.log('[VelvetApp] Component mounting...');
   const [searchParams, setSearchParams] = useSearchParams();
   const [isVerified, setIsVerified] = useState<boolean | null>(null);
-  const [isSidebarOpen, setSidebarOpen] = useState(true);
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 768px)').matches);
+  const [isSidebarOpen, setSidebarOpen] = useState(() => !window.matchMedia('(max-width: 768px)').matches);
   const [currentVideo, setCurrentVideo] = useState<Video | null>(null);
   const [currentCreator, setCurrentCreator] = useState<Creator | null>(null);
   const [userMode, setUserMode] = useState<UserMode>('General');
@@ -505,30 +506,45 @@ const VelvetApp = () => {
   // Navigation State
   const [currentView, setCurrentView] = useState<'home'|'models'|'categories'|'favorites'|'history'|'shorts'|'admin'>('home');
 
-  // Sync URL params with state
+  const searchParamsKey = searchParams.toString();
+
+  useEffect(() => {
+    const mql = window.matchMedia('(max-width: 768px)');
+    const apply = () => {
+      const nextIsMobile = !!mql.matches;
+      setIsMobile(nextIsMobile);
+      if (nextIsMobile) {
+        sidebarHistoryPushedRef.current = false;
+        setSidebarOpen(false);
+      }
+    };
+    apply();
+    mql.addEventListener?.('change', apply);
+    return () => mql.removeEventListener?.('change', apply);
+  }, []);
+
   useEffect(() => {
     const videoId = searchParams.get('v');
     const creatorId = searchParams.get('c');
     const query = searchParams.get('q');
 
-    if (videoId && !currentVideo) {
-      // Fetch video by ID if URL param exists
+    if (!videoId && currentVideo) setCurrentVideo(null);
+    if (videoId && currentVideo?.id !== videoId) {
       VideoService.getVideoById(videoId).then(v => {
         if (v) setCurrentVideo(v);
       });
     }
 
-    if (creatorId && !currentCreator) {
-      // Fetch creator by ID from URL param
+    if (!creatorId && currentCreator) setCurrentCreator(null);
+    if (creatorId && currentCreator?.id !== creatorId) {
       VideoService.getCreatorById(creatorId).then(c => {
         if (c) setCurrentCreator(c);
       });
     }
 
-    if (query) {
-      setSearchQuery(query);
-    }
-  }, []);
+    if (!query && searchQuery) setSearchQuery('');
+    if (query && searchQuery !== query) setSearchQuery(query);
+  }, [searchParamsKey, currentVideo, currentCreator, searchQuery]);
 
   // Update URL when state changes
   useEffect(() => {
@@ -558,12 +574,89 @@ const VelvetApp = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  useEffect(() => {
-    if (isVerified === false) document.body.style.overflow = 'hidden';
-    else document.body.style.overflow = 'unset';
-  }, [isVerified]);
+  const sidebarHistoryPushedRef = useRef(false);
 
-  const toggleSidebar = () => setSidebarOpen(!isSidebarOpen);
+  useEffect(() => {
+    if (isVerified === false || (isVerified === true && isMobile && isSidebarOpen)) document.body.style.overflow = 'hidden';
+    else document.body.style.overflow = 'unset';
+  }, [isVerified, isMobile, isSidebarOpen]);
+
+  const openSidebar = () => {
+    if (!isSidebarOpen) {
+      setSidebarOpen(true);
+      if (isMobile && !sidebarHistoryPushedRef.current) {
+        window.history.pushState({ velvetOverlay: 'sidebar' }, '');
+        sidebarHistoryPushedRef.current = true;
+      }
+    }
+  };
+
+  const closeSidebar = () => {
+    if (isSidebarOpen) {
+      if (isMobile && sidebarHistoryPushedRef.current) {
+        // Close immediately to avoid hiding content while waiting for popstate
+        setSidebarOpen(false);
+        sidebarHistoryPushedRef.current = false;
+        window.history.back();
+      } else {
+        setSidebarOpen(false);
+      }
+    }
+  };
+
+  const toggleSidebar = () => {
+    if (isSidebarOpen) closeSidebar();
+    else openSidebar();
+  };
+
+  useEffect(() => {
+    const onPop = () => {
+      if (sidebarHistoryPushedRef.current && isSidebarOpen) {
+        sidebarHistoryPushedRef.current = false;
+        setSidebarOpen(false);
+      }
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, [isSidebarOpen]);
+
+  useEffect(() => {
+    if (!isMobile || isVerified !== true) return;
+
+    let sx = 0;
+    let sy = 0;
+    let active = false;
+
+    const onStart = (e: TouchEvent) => {
+      if (!e.touches || e.touches.length !== 1) return;
+      const t = e.touches[0];
+      sx = t.clientX;
+      sy = t.clientY;
+      active = true;
+    };
+
+    const onEnd = (e: TouchEvent) => {
+      if (!active) return;
+      active = false;
+      const t = e.changedTouches && e.changedTouches[0];
+      if (!t) return;
+      const dx = t.clientX - sx;
+      const dy = t.clientY - sy;
+      if (Math.abs(dx) < 70) return;
+      if (Math.abs(dy) > Math.abs(dx) * 0.8) return;
+
+      if (!isSidebarOpen && sx < 20 && dx > 70) openSidebar();
+      if (isSidebarOpen && dx < -70) closeSidebar();
+    };
+
+    window.addEventListener('touchstart', onStart, { passive: true });
+    window.addEventListener('touchend', onEnd, { passive: true });
+    return () => {
+      window.removeEventListener('touchstart', onStart);
+      window.removeEventListener('touchend', onEnd);
+    };
+  }, [isMobile, isVerified, isSidebarOpen]);
+
   const handlePanic = () => window.location.href = "https://www.google.com";
 
   // Handle Video Click (add to history)
@@ -612,6 +705,8 @@ const VelvetApp = () => {
              
              <Sidebar 
                isOpen={isSidebarOpen} 
+               isMobile={isMobile}
+               onRequestClose={closeSidebar}
                currentView={currentView}
                onChangeView={(view) => { 
                  if (import.meta.env.DEV) console.log('[App] onChangeView called with:', view);
