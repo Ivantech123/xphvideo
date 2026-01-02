@@ -223,7 +223,6 @@ export const SearchService = {
     const q = parsed.text || '';
     const tag_filters = parsed.tagFilters;
     const tokens = tokenizeQuery(parsed.text || query);
-    const tokens = tokenizeQuery(parsed.text || query);
 
     const limit = params?.limit ?? 24;
     const offset = params?.offset ?? 0;
