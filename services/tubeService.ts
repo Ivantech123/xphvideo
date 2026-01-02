@@ -111,13 +111,18 @@ const QUERY_SYNONYMS: Record<string, string> = {
   'секс': 'sex'
 };
 
+const SORT_WORDS = new Set(['new', 'best', 'top', 'trending']);
+
 const normalizeTubeQuery = (query: string) => {
   const trimmed = query.trim();
   if (!trimmed) return trimmed;
   const lower = trimmed.toLowerCase();
   const direct = QUERY_SYNONYMS[lower];
   if (direct) return direct;
-  const replaced = lower.replace(/[\p{L}\p{N}]+/gu, (token) => QUERY_SYNONYMS[token] || token);
+  const tokens = lower.split(/\s+/).filter(Boolean);
+  const filtered = tokens.filter((t) => !SORT_WORDS.has(t));
+  const base = filtered.length ? filtered : tokens;
+  const replaced = base.map((t) => QUERY_SYNONYMS[t] || t).join(' ');
   return replaced === lower ? trimmed : replaced;
 };
 
@@ -150,6 +155,9 @@ const PROXIES = [
   { name: 'thingproxy', url: (u: string) => `https://thingproxy.freeboard.io/fetch/${u}` }
 ];
 
+const PROXY_BACKOFF_MS = 60_000;
+const proxyFailures = new Map<string, number>();
+
 type ProxyFetchOptions<T> = {
   signal?: AbortSignal;
   validate?: (text: string) => boolean;
@@ -160,6 +168,10 @@ type ProxyFetchOptions<T> = {
 const fetchWithProxy = async <T = string>(targetUrl: string, options: ProxyFetchOptions<T> = {}): Promise<T> => {
   const { signal, validate, parse } = options;
   for (const proxy of PROXIES) {
+    const lastFailed = proxyFailures.get(proxy.name);
+    if (lastFailed && Date.now() - lastFailed < PROXY_BACKOFF_MS) {
+      continue;
+    }
     try {
       const res = await fetch(proxy.url(targetUrl), { signal });
       if (!res.ok) throw new Error(`Status ${res.status}`);
@@ -175,9 +187,11 @@ const fetchWithProxy = async <T = string>(targetUrl: string, options: ProxyFetch
       if (!text) throw new Error('Empty response');
       if (validate && !validate(text)) throw new Error('Validation failed');
       if (parse) return parse(text);
+      proxyFailures.delete(proxy.name);
       return text as unknown as T;
     } catch (e) {
-      if (isAbortError(e, signal)) throw e;
+      if (signal?.aborted || isAbortError(e, signal)) throw e;
+      proxyFailures.set(proxy.name, Date.now());
       console.warn(`[TubeService] Proxy ${proxy.name} failed:`, e);
     }
   }
@@ -313,7 +327,8 @@ export const TubeAdapter = {
       return data.videos.map(ev => {
         // Extract first keyword as pseudo-author name for variety
         const keywords = ev.keywords?.split(',').map(k => k.trim()).filter(k => k.length > 0) || [];
-        const pseudoAuthor = keywords[0] || 'Eporner';
+        const creatorName = keywords[0] || 'Eporner';
+        const creatorId = `ep_creator_${ev.id.slice(0, 6)}`;
 
         const embedUrl = extractEmbedSrc(ev.embed) || `https://www.eporner.com/embed/${ev.id}`;
         
@@ -327,8 +342,8 @@ export const TubeAdapter = {
           duration: ev.length_sec,
           publishedAt: ev.added || undefined,
           creator: {
-            id: `ep_${pseudoAuthor.replace(/\s+/g, '_')}`,
-            name: pseudoAuthor,
+            id: creatorId,
+            name: creatorName,
             avatar: 'https://www.eporner.com/favicon.ico',
           verified: false,
           tier: 'Standard'
@@ -548,7 +563,8 @@ export const TubeAdapter = {
         }
         
         const keywords = data.keywords?.split(',').map(k => k.trim()).filter(k => k.length > 0) || [];
-        const pseudoAuthor = keywords[0] || 'Eporner';
+        const creatorName = keywords[0] || 'Eporner';
+        const creatorId = `ep_creator_${data.id.slice(0, 6)}`;
 
         const embedUrl = extractEmbedSrc(data.embed) || `https://www.eporner.com/embed/${realId}`;
 
@@ -562,8 +578,8 @@ export const TubeAdapter = {
           duration: data.length_sec,
           publishedAt: (data as any).added || undefined,
           creator: {
-            id: `ep_${pseudoAuthor.replace(/\s+/g, '_')}`,
-            name: pseudoAuthor,
+            id: creatorId,
+            name: creatorName,
             avatar: 'https://www.eporner.com/favicon.ico',
             verified: false,
             tier: 'Standard'
@@ -692,3 +708,34 @@ const parseDuration = (durationStr: string): number => {
   if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
   return 0;
 };
+
+export const runTubeSmokeTest = async () => {
+  const results: Record<string, { ok: boolean; count: number; error?: string; skipped?: boolean }> = {};
+
+  const tasks: Array<{ name: string; run: () => Promise<Video[]> }> = [
+    { name: 'eporner', run: () => TubeAdapter.fetchEporner('amateur', 6, 1, 'trending') },
+    { name: 'pornhub', run: () => TubeAdapter.fetchPornhub('amateur', 1, 'trending') }
+  ];
+
+  if (typeof DOMParser !== 'undefined') {
+    tasks.push({ name: 'xvideos', run: () => TubeAdapter.fetchXVideos('amateur', 1, 'trending') });
+  } else {
+    results.xvideos = { ok: false, count: 0, skipped: true, error: 'DOMParser unavailable' };
+  }
+
+  for (const task of tasks) {
+    try {
+      const items = await task.run();
+      const count = Array.isArray(items) ? items.length : 0;
+      results[task.name] = { ok: count > 0, count };
+    } catch (e) {
+      results[task.name] = { ok: false, count: 0, error: e instanceof Error ? e.message : String(e) };
+    }
+  }
+
+  return results;
+};
+
+if (typeof window !== 'undefined' && (import.meta as any)?.env?.DEV) {
+  (window as unknown as { velvetTubeSmokeTest?: () => Promise<unknown> }).velvetTubeSmokeTest = runTubeSmokeTest;
+}
