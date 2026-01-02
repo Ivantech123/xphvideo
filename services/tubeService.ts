@@ -111,7 +111,22 @@ const QUERY_SYNONYMS: Record<string, string> = {
   'секс': 'sex'
 };
 
-const SORT_WORDS = new Set(['new', 'best', 'top', 'trending']);
+const SORT_WORDS = new Set([
+  'new',
+  'best',
+  'top',
+  'trending',
+  'новое',
+  'новинка',
+  'новинки',
+  'тренд',
+  'тренды',
+  'трендовое',
+  'лучшее',
+  'топ',
+  'свежее',
+  'горячее'
+]);
 
 const normalizeTubeQuery = (query: string) => {
   const trimmed = query.trim();
@@ -148,11 +163,21 @@ interface EpornerVideo {
 }
 
 const PROXIES = [
-  { name: 'corsproxy', url: (u: string) => `https://corsproxy.io/?${encodeURIComponent(u)}` },
-  { name: 'codetabs', url: (u: string) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}` },
-  { name: 'allorigins', url: (u: string) => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`, json: true },
-  { name: 'jina', url: (u: string) => `https://r.jina.ai/http://${u.replace(/^https?:\/\//, '')}` },
-  { name: 'thingproxy', url: (u: string) => `https://thingproxy.freeboard.io/fetch/${u}` }
+  ...(typeof window !== 'undefined' && (import.meta as any)?.env?.PROD
+    ? [
+        {
+          name: 'netlify',
+          url: (u: string) => `/.netlify/functions/tube-proxy?url=${encodeURIComponent(u)}`,
+          mode: 'any' as const
+        }
+      ]
+    : []),
+  { name: 'corsproxy', url: (u: string) => `https://corsproxy.io/?${encodeURIComponent(u)}`, mode: 'any' as const },
+  { name: 'codetabs', url: (u: string) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`, mode: 'any' as const },
+  { name: 'allorigins', url: (u: string) => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`, json: true, mode: 'any' as const },
+  { name: 'allorigins-raw', url: (u: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`, mode: 'any' as const },
+  { name: 'jina', url: (u: string) => `https://r.jina.ai/http://${u.replace(/^https?:\/\//, '')}`, mode: 'html' as const },
+  { name: 'thingproxy', url: (u: string) => `https://thingproxy.freeboard.io/fetch/${u}`, mode: 'any' as const }
 ];
 
 const PROXY_BACKOFF_MS = 60_000;
@@ -162,14 +187,18 @@ type ProxyFetchOptions<T> = {
   signal?: AbortSignal;
   validate?: (text: string) => boolean;
   parse?: (text: string) => T;
+  mode?: 'json' | 'html' | 'any';
 };
 
 // Robust Proxy Rotator
 const fetchWithProxy = async <T = string>(targetUrl: string, options: ProxyFetchOptions<T> = {}): Promise<T> => {
-  const { signal, validate, parse } = options;
+  const { signal, validate, parse, mode = 'any' } = options;
   for (const proxy of PROXIES) {
     const lastFailed = proxyFailures.get(proxy.name);
     if (lastFailed && Date.now() - lastFailed < PROXY_BACKOFF_MS) {
+      continue;
+    }
+    if (mode === 'json' && proxy.mode === 'html') {
       continue;
     }
     try {
@@ -201,6 +230,7 @@ const fetchWithProxy = async <T = string>(targetUrl: string, options: ProxyFetch
 const isBlockedHtml = (value: string) => {
   const t = value.trim().toLowerCase();
   return (
+    t.startsWith('title:') ||
     t.includes('access denied') ||
     t.includes('cloudflare') ||
     t.includes('captcha') ||
@@ -213,6 +243,7 @@ const isBlockedHtml = (value: string) => {
 const fetchJsonWithProxy = async <T,>(targetUrl: string, signal?: AbortSignal): Promise<T> =>
   fetchWithProxy<T>(targetUrl, {
     signal,
+    mode: 'json',
     validate: (text) => !isHtmlPayload(text) && !isBlockedHtml(text),
     parse: (text) => JSON.parse(text) as T
   });

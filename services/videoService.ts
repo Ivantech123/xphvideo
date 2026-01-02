@@ -47,6 +47,50 @@ function shuffleArray<T>(array: T[]): T[] {
   return arr;
 }
 
+const getSourceKey = (video: Video) => (video.source ? String(video.source).trim() : 'Manual');
+
+const balanceBySource = (videos: Video[], maxStreak: number = 3): Video[] => {
+  if (videos.length <= 2) return videos;
+  const buckets = new Map<string, Video[]>();
+  for (const video of videos) {
+    const key = getSourceKey(video);
+    const list = buckets.get(key);
+    if (list) list.push(video);
+    else buckets.set(key, [video]);
+  }
+  if (buckets.size <= 1) return videos;
+
+  const sources = Array.from(buckets.keys());
+  const result: Video[] = [];
+  let lastSource = '';
+  let streak = 0;
+  const total = videos.length;
+
+  for (let guard = 0; result.length < total && guard < total * 5; guard += 1) {
+    const candidates = sources
+      .filter((s) => (buckets.get(s)?.length ?? 0) > 0)
+      .sort((a, b) => (buckets.get(b)?.length ?? 0) - (buckets.get(a)?.length ?? 0));
+    if (candidates.length === 0) break;
+
+    let picked = candidates[0];
+    if (picked === lastSource && streak >= maxStreak && candidates.length > 1) {
+      picked = candidates.find((s) => s !== lastSource) || picked;
+    }
+
+    const next = buckets.get(picked)?.shift();
+    if (!next) continue;
+    result.push(next);
+    if (picked === lastSource) {
+      streak += 1;
+    } else {
+      lastSource = picked;
+      streak = 1;
+    }
+  }
+
+  return result.length === videos.length ? result : videos;
+};
+
 type CacheEntry<T> = { ts: number; data: T };
 
 const VIDEOS_CACHE_TTL_MS = 30_000;
@@ -188,6 +232,7 @@ export const VideoService = {
             if (sortMode === 'trending') {
                 videos = RecommendationService.sortByRecommendation(videos);
             }
+            videos = balanceBySource(videos);
             if (import.meta.env.DEV) console.log('[VideoService] Total videos after interleave:', videos.length);
         } else {
             // Single source - fetch directly
