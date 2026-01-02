@@ -147,6 +147,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const handleSearch = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
+      RecommendationService.trackSearch(searchValue);
       addToHistory(searchValue);
       onSearch(searchValue);
       setMobileSearchOpen(false);
@@ -159,6 +160,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const handleSuggestionClick = (suggestion: string) => {
     setSearchValue(suggestion);
+    RecommendationService.trackSearch(suggestion);
     addToHistory(suggestion);
     onSearch(suggestion);
     setMobileSearchOpen(false);

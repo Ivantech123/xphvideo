@@ -179,7 +179,7 @@ export const VideoService = {
                 const filteredManual = manualVideos.filter(v => {
                     if (!query) return true;
                     return v.title.toLowerCase().includes(query.toLowerCase()) || 
-                           v.tags.some(t => t.label.toLowerCase().includes(query.toLowerCase()));
+                           v.tags.some(t => (typeof t === 'string' ? t : t.label).toLowerCase().includes(query.toLowerCase()));
                 });
                 videos = [...filteredManual, ...videos];
             }
@@ -224,7 +224,7 @@ export const VideoService = {
         if (tagFilters.length > 0) {
             const wanted = new Set(tagFilters.map(norm));
             videos = videos.filter(v => {
-                const labels = (v.tags || []).map(t => norm((t as any)?.label ?? String(t)));
+                const labels = (v.tags || []).map(t => norm(typeof t === 'string' ? t : t.label));
                 return labels.some(l => wanted.has(l));
             });
         }
@@ -236,6 +236,16 @@ export const VideoService = {
     }
 
     // Shuffle only for non-personalized sorts. For 'trending' we already sort by RecommendationService.
+    if (sortMode === 'new') {
+        videos = [...videos].sort((a, b) => {
+            const ta = Date.parse(a.publishedAt || '');
+            const tb = Date.parse(b.publishedAt || '');
+            const na = Number.isFinite(ta) ? ta : 0;
+            const nb = Number.isFinite(tb) ? tb : 0;
+            if (nb !== na) return nb - na;
+            return (b.views || 0) - (a.views || 0);
+        });
+    }
     if (!query && !filterShorts && sortMode === 'best') {
         videos = shuffleArray(videos);
     }
@@ -308,6 +318,7 @@ export const VideoService = {
       newFavs = [video, ...favorites];
     }
     localStorage.setItem('velvet_favorites', JSON.stringify(newFavs));
+    RecommendationService.trackLike(video, !exists);
     return !exists; // returns true if added, false if removed
   },
 

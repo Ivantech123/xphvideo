@@ -9,11 +9,12 @@ import { BossMode } from './components/BossMode';
 import { Footer } from './components/Footer';
 import { LegalModal } from './components/LegalModal';
 import { Icon } from './components/Icon';
-import { COLLECTIONS as STATIC_COLLECTIONS, CATEGORIES_GENERAL, CATEGORIES_HIM, CATEGORIES_HER, CATEGORIES_COUPLES, CATEGORIES_GAY, CATEGORIES_TRANS, CATEGORIES_LESBIAN } from './constants';
-import { Video, UserMode, Creator, Collection } from './types';
+import { CATEGORIES_GENERAL, CATEGORIES_HIM, CATEGORIES_HER, CATEGORIES_COUPLES, CATEGORIES_GAY, CATEGORIES_TRANS, CATEGORIES_LESBIAN, POPULAR_SEARCHES } from './constants';
+import { Video, UserMode, Creator } from './types';
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
 import { VideoService } from './services/videoService';
 import { SearchService } from './services/searchService';
+import { RecommendationService } from './services/recommendationService';
 import { GeoBlock } from './components/GeoBlock';
 import { AuthProvider } from './contexts/AuthContext';
 import { AuthModal } from './components/AuthModal';
@@ -80,7 +81,8 @@ interface HomeProps {
   const { t } = useLanguage();
   const [videos, setVideos] = useState<Video[]>([]);
   const [creators, setCreators] = useState<Creator[]>([]);
-  const [collections, setCollections] = useState<Collection[]>(STATIC_COLLECTIONS);
+  const [homeSections, setHomeSections] = useState<Array<{ id: string; title: string; query: string; videos: Video[]; showQuery?: boolean }>>([]);
+  const [homeSectionsLoading, setHomeSectionsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
@@ -91,6 +93,8 @@ interface HomeProps {
   const requestIdRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
   const seenIdsRef = useRef<Set<string>>(new Set());
+  const homeRequestIdRef = useRef(0);
+  const homeAbortRef = useRef<AbortController | null>(null);
   
   // Dynamic Category List
   const currentCategories = useMemo(() => {
@@ -104,6 +108,7 @@ interface HomeProps {
       default: return CATEGORIES_GENERAL;
     }
   }, [userMode]);
+  const showHomeSections = currentView === 'home' && !searchQuery.trim() && activeCategory === currentCategories[0];
 
   // Reset page and videos when filters change (home view only)
   useEffect(() => {
@@ -189,20 +194,26 @@ interface HomeProps {
 
     (async () => {
       const limit = 24;
+      const offset = (page - 1) * limit;
+      const trimmedSearch = searchQuery.trim();
+      const isSpecialQuery = ['trending', 'new', 'shorts', 'В тренде', 'Новое', 'Shorts'].includes(trimmedSearch);
 
       // If user typed a search query, prefer indexed search via Supabase.
-      if (searchQuery) {
+      if (trimmedSearch && !isSpecialQuery) {
         try {
-          const { data: indexed, error } = await SearchService.searchVideos(searchQuery, {
+          const { data: indexed, error, exhausted } = await SearchService.searchVideos(trimmedSearch, {
             limit,
-            offset: (page - 1) * limit,
+            offset,
+            source: activeSource,
+            duration: activeDuration,
+            sort: activeSort,
           });
 
           if (controller.signal.aborted || requestId !== requestIdRef.current) return;
 
           // If catalog isn't ready (RPC missing) or empty results, fallback to legacy fetch.
           if (!error && indexed.length > 0) {
-            if (indexed.length < limit) setHasMore(false);
+            if (exhausted || indexed.length < limit) setHasMore(false);
             const filtered = indexed.filter(v => {
               const id = v.id;
               if (!id) return false;
@@ -243,6 +254,125 @@ interface HomeProps {
 
     return () => controller.abort();
   }, [userMode, activeCategory, currentView, searchQuery, page, activeSource, activeSort, activeDuration, currentCategories, setActiveCategory]);
+
+  useEffect(() => {
+    if (!showHomeSections) {
+      homeAbortRef.current?.abort();
+      homeRequestIdRef.current += 1;
+      setHomeSections([]);
+      setHomeSectionsLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    homeAbortRef.current?.abort();
+    homeAbortRef.current = controller;
+    const requestId = ++homeRequestIdRef.current;
+
+    const normalizeSeed = (value: string) => value.trim().toLowerCase().replace(/^#/, '');
+    const used = new Set<string>();
+    const seeds: Array<{ id: string; title: string; query: string; sort?: 'trending' | 'new' | 'best'; showQuery?: boolean }> = [];
+    const maxSections = 6;
+
+    const pushSeed = (seed: { id: string; title: string; query: string; sort?: 'trending' | 'new' | 'best'; showQuery?: boolean }) => {
+      const normalized = normalizeSeed(seed.query);
+      if (!normalized || used.has(normalized)) return;
+      used.add(normalized);
+      seeds.push(seed);
+    };
+
+    const topSearches = RecommendationService.getTopSearches(2);
+    const topTags = RecommendationService.getTopTags(2);
+    const personalQuery = RecommendationService.getPersonalizedQuery();
+
+    pushSeed({ id: 'for_you', title: t('for_you'), query: personalQuery, sort: 'trending', showQuery: false });
+
+    const history = VideoService.getHistory();
+    history.slice(0, 2).forEach((video, idx) => {
+      const tags = (video.tags || []).map(t => (typeof t === 'string' ? t : t?.label || '')).filter(Boolean);
+      const fallback = video.title?.split(' ').slice(0, 3).join(' ') || '';
+      const query = tags.slice(0, 2).join(' ') || fallback;
+      if (!query) return;
+      const titleBase = video.title?.trim() || tags[0];
+      const title = titleBase ? `${t('because_you_watched')}: ${titleBase}` : t('because_you_watched');
+      pushSeed({ id: `recent_${idx}`, title, query, sort: 'trending', showQuery: false });
+    });
+
+    topSearches.forEach((q, idx) => {
+      pushSeed({ id: `search_${idx}`, title: `${t('based_on_search')}: ${q}`, query: q, sort: 'trending' });
+    });
+
+    topTags.forEach((tag, idx) => {
+      pushSeed({ id: `tag_${idx}`, title: `${t('because_you_like')}: ${tag}`, query: `#${tag}`, sort: 'trending' });
+    });
+
+    if (seeds.length < maxSections) {
+      for (const term of POPULAR_SEARCHES) {
+        if (seeds.length >= maxSections) break;
+        pushSeed({ id: `popular_${term}`, title: `${t('popular_searches')}: ${term}`, query: term, sort: 'trending' });
+      }
+    }
+
+    const limitPerSection = 9;
+    setHomeSectionsLoading(true);
+
+    const fetchSection = async (seed: { id: string; title: string; query: string; sort?: 'trending' | 'new' | 'best'; showQuery?: boolean }) => {
+      const sort = seed.sort || 'trending';
+      try {
+        const { data, error } = await SearchService.searchVideos(seed.query, {
+          limit: limitPerSection,
+          offset: 0,
+          source: activeSource,
+          duration: activeDuration,
+          sort,
+        });
+        if (controller.signal.aborted || requestId !== homeRequestIdRef.current) return null;
+        if (!error && data.length > 0) {
+          return { ...seed, videos: data };
+        }
+      } catch {}
+
+      try {
+        const fallback = await VideoService.getVideos(
+          userMode,
+          seed.query,
+          1,
+          activeSource,
+          sort,
+          activeDuration,
+          controller.signal
+        );
+        if (controller.signal.aborted || requestId !== homeRequestIdRef.current) return null;
+        if (fallback.length > 0) {
+          return { ...seed, videos: fallback.slice(0, limitPerSection) };
+        }
+      } catch {}
+
+      return null;
+    };
+
+    Promise.all(seeds.slice(0, maxSections).map(fetchSection))
+      .then((results) => {
+        if (controller.signal.aborted || requestId !== homeRequestIdRef.current) return;
+        const seen = new Set<string>();
+        const sections = (results.filter(Boolean) as Array<{ id: string; title: string; query: string; videos: Video[]; showQuery?: boolean }>)
+          .map((section) => {
+            const unique = section.videos.filter((v) => {
+              if (!v.id) return false;
+              if (seen.has(v.id)) return false;
+              seen.add(v.id);
+              return true;
+            });
+            return { ...section, videos: unique.slice(0, 8) };
+          })
+          .filter((section) => section.videos.length > 0);
+        setHomeSections(sections);
+      })
+      .finally(() => {
+        if (controller.signal.aborted || requestId !== homeRequestIdRef.current) return;
+        setHomeSectionsLoading(false);
+      });
+  }, [showHomeSections, userMode, activeSource, activeDuration, t]);
 
   // Render Logic based on View
   if (currentView === 'shorts') {
@@ -457,25 +587,50 @@ interface HomeProps {
             )}
           </section>
           
-          {userMode === 'General' && collections.map(collection => (
-            collection.videos.length > 0 && (
-            <section key={collection.id} className="border-t border-brand-border pt-8">
-              <div className="flex justify-between items-center mb-6">
-                  <div>
-                    <h2 className="text-2xl font-serif font-bold text-white flex items-center gap-2">
-                      {collection.id === 'col2' && <Icon name="Lock" size={20} className="text-brand-gold" />}
-                      {collection.title}
-                    </h2>
-                    <p className="text-sm text-gray-500 mt-1 font-serif italic">{collection.description}</p>
+          {showHomeSections && (
+            <>
+              {homeSectionsLoading && homeSections.length === 0 && (
+                <section className="border-t border-brand-border pt-8">
+                  <div className="h-5 w-40 bg-white/10 rounded mb-6 animate-pulse"></div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {[...Array(4)].map((_, i) => (
+                      <div key={i} className="animate-pulse">
+                        <div className="aspect-video bg-white/10 rounded-lg mb-3"></div>
+                        <div className="h-4 bg-white/10 rounded w-3/4 mb-2"></div>
+                        <div className="h-3 bg-white/5 rounded w-1/2"></div>
+                      </div>
+                    ))}
                   </div>
-                  <button className="text-brand-gold text-xs font-bold uppercase tracking-widest hover:underline">{t('view_all')}</button>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {collection.videos.map(video => <VideoCard key={video.id} video={video} onClick={() => onVideoClick(video)} onCreatorClick={onCreatorClick} />)}
-              </div>
-            </section>
-            )
-          ))}
+                </section>
+              )}
+
+              {homeSections.map(section => (
+                <section key={section.id} className="border-t border-brand-border pt-8">
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-6">
+                    <div>
+                      <h2 className="text-2xl font-serif font-bold text-white flex items-center gap-2">
+                        <Icon name="Sparkles" size={18} className="text-brand-gold" />
+                        {section.title}
+                      </h2>
+                    {section.id !== 'for_you' && section.showQuery !== false && (
+                      <p className="text-xs text-gray-500 mt-1">{section.query}</p>
+                    )}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {section.videos.map(video => (
+                      <VideoCard
+                        key={video.id}
+                        video={video}
+                        onClick={() => onVideoClick(video)}
+                        onCreatorClick={onCreatorClick}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </>
+          )}
         </div>
       </div>
       
@@ -508,6 +663,23 @@ const VelvetApp = () => {
 
   const searchParamsKey = searchParams.toString();
 
+  const currentVideoRef = useRef<Video | null>(null);
+  const currentCreatorRef = useRef<Creator | null>(null);
+  const searchQueryRef = useRef<string>('');
+  const lastSearchKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    currentVideoRef.current = currentVideo;
+  }, [currentVideo]);
+
+  useEffect(() => {
+    currentCreatorRef.current = currentCreator;
+  }, [currentCreator]);
+
+  useEffect(() => {
+    searchQueryRef.current = searchQuery;
+  }, [searchQuery]);
+
   useEffect(() => {
     const mql = window.matchMedia('(max-width: 768px)');
     const apply = () => {
@@ -524,27 +696,36 @@ const VelvetApp = () => {
   }, []);
 
   useEffect(() => {
+    if (lastSearchKeyRef.current === searchParamsKey) {
+      lastSearchKeyRef.current = null;
+      return;
+    }
+
     const videoId = searchParams.get('v');
     const creatorId = searchParams.get('c');
     const query = searchParams.get('q');
 
-    if (!videoId && currentVideo) setCurrentVideo(null);
-    if (videoId && currentVideo?.id !== videoId) {
+    const currentVideoId = currentVideoRef.current?.id;
+    const currentCreatorId = currentCreatorRef.current?.id;
+    const currentQuery = searchQueryRef.current;
+
+    if (!videoId && currentVideoId) setCurrentVideo(null);
+    if (videoId && currentVideoId !== videoId) {
       VideoService.getVideoById(videoId).then(v => {
         if (v) setCurrentVideo(v);
       });
     }
 
-    if (!creatorId && currentCreator) setCurrentCreator(null);
-    if (creatorId && currentCreator?.id !== creatorId) {
+    if (!creatorId && currentCreatorId) setCurrentCreator(null);
+    if (creatorId && currentCreatorId !== creatorId) {
       VideoService.getCreatorById(creatorId).then(c => {
         if (c) setCurrentCreator(c);
       });
     }
 
-    if (!query && searchQuery) setSearchQuery('');
-    if (query && searchQuery !== query) setSearchQuery(query);
-  }, [searchParamsKey, currentVideo, currentCreator, searchQuery]);
+    if (!query && currentQuery) setSearchQuery('');
+    if (query && currentQuery !== query) setSearchQuery(query);
+  }, [searchParamsKey]);
 
   // Update URL when state changes
   useEffect(() => {
@@ -552,8 +733,12 @@ const VelvetApp = () => {
     if (currentVideo) params.v = currentVideo.id;
     if (currentCreator) params.c = currentCreator.id;
     if (searchQuery) params.q = searchQuery;
-    setSearchParams(params);
-  }, [currentVideo, currentCreator, searchQuery]);
+    const nextKey = new URLSearchParams(params).toString();
+    if (nextKey !== searchParamsKey) {
+      lastSearchKeyRef.current = nextKey;
+      setSearchParams(params);
+    }
+  }, [currentVideo, currentCreator, searchQuery, searchParamsKey]);
 
   useEffect(() => {
     const verified = localStorage.getItem('velvet_age_verified');
@@ -593,13 +778,14 @@ const VelvetApp = () => {
 
   const closeSidebar = () => {
     if (isSidebarOpen) {
+      // IMPORTANT: do NOT call history.back() on close.
+      // It can revert other in-app navigation (v/c/q params) and make content "disappear".
+      setSidebarOpen(false);
       if (isMobile && sidebarHistoryPushedRef.current) {
-        // Close immediately to avoid hiding content while waiting for popstate
-        setSidebarOpen(false);
+        try {
+          window.history.replaceState({ velvetOverlay: null }, '');
+        } catch {}
         sidebarHistoryPushedRef.current = false;
-        window.history.back();
-      } else {
-        setSidebarOpen(false);
       }
     }
   };
@@ -611,14 +797,15 @@ const VelvetApp = () => {
 
   useEffect(() => {
     const onPop = () => {
-      if (sidebarHistoryPushedRef.current && isSidebarOpen) {
+      // Back button should close sidebar on mobile instead of navigating away.
+      if (isMobile && isSidebarOpen) {
         sidebarHistoryPushedRef.current = false;
         setSidebarOpen(false);
       }
     };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
-  }, [isSidebarOpen]);
+  }, [isMobile, isSidebarOpen]);
 
   useEffect(() => {
     if (!isMobile || isVerified !== true) return;

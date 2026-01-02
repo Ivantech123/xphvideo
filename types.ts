@@ -15,6 +15,8 @@ export interface Tag {
   label: string;
 }
 
+export type TagLike = Tag | string;
+
 export interface Chapter {
   time: number; // seconds
   label: string;
@@ -30,12 +32,13 @@ export interface Video {
   source?: 'Local' | 'Pornhub' | 'Eporner' | 'RedTube' | 'XVideos'; 
   duration: number; // in seconds
   creator: Creator;
-  tags: Tag[];
+  tags: TagLike[];
   chapters?: Chapter[]; // New: Smart Timeline
   views: number;
   rating?: number; // 0-100 percentage
   quality: 'HD' | '4K' | '8K';
   price?: number; // If part of a paid collection
+  publishedAt?: string;
 }
 
 export interface Collection {

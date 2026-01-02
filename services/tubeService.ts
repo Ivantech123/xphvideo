@@ -165,14 +165,15 @@ export const TubeAdapter = {
         id: `ep_${ev.id}`,
         title: ev.title,
         description: ev.keywords, 
-        thumbnail: ev.default_thumb.src,
-        videoUrl: '', 
-        embedUrl: embedUrl,
-        duration: ev.length_sec,
-        creator: {
-          id: `ep_${pseudoAuthor.replace(/\s+/g, '_')}`,
-          name: pseudoAuthor,
-          avatar: 'https://www.eporner.com/favicon.ico',
+          thumbnail: ev.default_thumb.src,
+          videoUrl: '', 
+          embedUrl: embedUrl,
+          duration: ev.length_sec,
+          publishedAt: ev.added || undefined,
+          creator: {
+            id: `ep_${pseudoAuthor.replace(/\s+/g, '_')}`,
+            name: pseudoAuthor,
+            avatar: 'https://www.eporner.com/favicon.ico',
           verified: false,
           tier: 'Standard'
         },
@@ -229,11 +230,12 @@ export const TubeAdapter = {
           id: `ph_${ph.video_id}`,
           title: ph.title,
           description: tagsList.join(', ') || 'No description available',
-          thumbnail: ph.default_thumb,
-          videoUrl: '', 
-          embedUrl: `https://www.pornhub.com/embed/${ph.video_id}`,
-          duration: parseDuration(ph.duration),
-          creator: {
+            thumbnail: ph.default_thumb,
+            videoUrl: '', 
+            embedUrl: `https://www.pornhub.com/embed/${ph.video_id}`,
+            duration: parseDuration(ph.duration),
+            publishedAt: ph.publish_date || undefined,
+            creator: {
             id: `ph_c_${creatorName.replace(/\s+/g, '_')}`,
             name: creatorName,
             avatar: ph.thumbs?.[0]?.src || 'https://www.pornhub.com/favicon.ico', 
@@ -403,6 +405,7 @@ export const TubeAdapter = {
           videoUrl: '', 
           embedUrl: embedUrl,
           duration: data.length_sec,
+          publishedAt: (data as any).added || undefined,
           creator: {
             id: `ep_${pseudoAuthor.replace(/\s+/g, '_')}`,
             name: pseudoAuthor,
@@ -454,6 +457,7 @@ export const TubeAdapter = {
           videoUrl: '',
           embedUrl: `https://www.pornhub.com/embed/${ph.video_id}`,
           duration: parseDuration(ph.duration),
+          publishedAt: (ph as any).publish_date || undefined,
           creator: {
             id: `ph_c_${creatorName.replace(/\s+/g, '_')}`,
             name: creatorName,

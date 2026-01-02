@@ -38,6 +38,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose, onVide
   const [reportError, setReportError] = useState<string | null>(null);
   const [reportSent, setReportSent] = useState(false);
 
+  const getTagLabel = (tag: Video['tags'][number]) => (typeof tag === 'string' ? tag : tag.label);
+
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
     const s = Math.floor(seconds % 60);
@@ -97,7 +99,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose, onVide
 
     const loadRelated = async () => {
       try {
-        const tags = video.tags?.slice(0, 3).map(t => t.label).join(' ') || video.title.split(' ').slice(0, 3).join(' ');
+        const tags = video.tags?.slice(0, 3).map(getTagLabel).join(' ') || video.title.split(' ').slice(0, 3).join(' ');
         const query = tags || 'popular';
         const vids = await VideoService.getVideos('General', query, 1, 'All', 'trending', 'All', controller.signal);
         if (controller.signal.aborted) return;
@@ -211,7 +213,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose, onVide
           <Icon name="ArrowLeft" size={24} />
         </button>
         <div className="flex-1 truncate">
-           <span className="font-semibold text-sm md:text-base text-gray-300">{t('category_label')} <span className="text-white hover:underline cursor-pointer">{video.tags?.[0]?.label || 'General'}</span></span>
+           <span className="font-semibold text-sm md:text-base text-gray-300">{t('category_label')} <span className="text-white hover:underline cursor-pointer">{video.tags?.[0] ? getTagLabel(video.tags[0]) : 'General'}</span></span>
         </div>
         <button 
            onClick={() => setIsBlurred(!isBlurred)}

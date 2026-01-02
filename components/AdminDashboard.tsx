@@ -578,7 +578,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onExit }) => {
                        </td>
                        <td className="p-4">
                          <div className="font-bold text-white line-clamp-1">{video.title}</div>
-                         <div className="text-xs text-gray-500">{video.tags.slice(0, 3).map(t => t.label).join(', ')}</div>
+                        <div className="text-xs text-gray-500">{video.tags.slice(0, 3).map(t => (typeof t === 'string' ? t : t.label)).join(', ')}</div>
                        </td>
                        <td className="p-4">
                         <span className={`text-xs px-2 py-1 rounded ${

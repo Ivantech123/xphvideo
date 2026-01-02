@@ -21,6 +21,8 @@ export const VideoEditorModal: React.FC<VideoEditorModalProps> = ({ video, onSav
   });
 
   const [tagInput, setTagInput] = useState('');
+  const getTagLabel = (tag: Video['tags'][number]) => (typeof tag === 'string' ? tag : tag.label);
+  const getTagKey = (tag: Video['tags'][number]) => (typeof tag === 'string' ? tag : tag.id);
 
   useEffect(() => {
     if (video) {
@@ -48,7 +50,7 @@ export const VideoEditorModal: React.FC<VideoEditorModalProps> = ({ video, onSav
   const removeTag = (tagId: string) => {
     setFormData(prev => ({
       ...prev,
-      tags: (prev.tags || []).filter(t => t.id !== tagId)
+      tags: (prev.tags || []).filter(t => (typeof t === 'string' ? t !== tagId : t.id !== tagId))
     }));
   };
 
@@ -188,9 +190,9 @@ export const VideoEditorModal: React.FC<VideoEditorModalProps> = ({ video, onSav
              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Tags</label>
              <div className="flex flex-wrap gap-2 mb-2 p-2 bg-black/20 rounded min-h-[40px]">
                 {formData.tags?.map(tag => (
-                   <span key={tag.id} className="bg-brand-gold text-black text-xs font-bold px-2 py-1 rounded flex items-center gap-1">
-                      {tag.label}
-                      <button type="button" onClick={() => removeTag(tag.id)} className="hover:text-white"><Icon name="X" size={12} /></button>
+                   <span key={getTagKey(tag)} className="bg-brand-gold text-black text-xs font-bold px-2 py-1 rounded flex items-center gap-1">
+                      {getTagLabel(tag)}
+                      <button type="button" onClick={() => removeTag(getTagKey(tag))} className="hover:text-white"><Icon name="X" size={12} /></button>
                    </span>
                 ))}
              </div>

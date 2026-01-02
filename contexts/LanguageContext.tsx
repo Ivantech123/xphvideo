@@ -63,6 +63,11 @@ const DICTIONARY = {
     curated: 'Подборка AI',
     popular_today: 'Популярное сегодня',
     view_all: 'Смотреть все',
+    for_you: 'Для вас',
+    based_on_search: 'По вашим запросам',
+    because_you_like: 'Потому что вам нравится',
+    because_you_watched: 'Потому что вы смотрели',
+    popular_searches: 'Популярные запросы',
     
     // Empty States
     no_favorites: 'В избранном пока пусто. Добавляйте видео, нажимая на сердце.',
@@ -195,6 +200,11 @@ const DICTIONARY = {
     // Geo Block
     access_denied: 'Доступ Запрещен',
     geo_restricted: 'Сервис недоступен в вашем регионе.',
+    geo_restricted_reason_1: 'В вашем регионе действуют ограничения, связанные с законодательством и требованиями к возрастной/личностной верификации.',
+    geo_restricted_reason_2: 'Чтобы минимизировать сбор персональных данных, риски судебных разбирательств и издержки на комплаенс, мы отключили доступ из этого региона.',
+    geo_restricted_reason_3: 'Мы не обходим региональные ограничения и не предоставляем инструкции по их обходу.',
+    geo_detected_country: 'Определённый регион',
+    geo_open_policies: 'Открыть политики / Legal',
     
     // Kinks
     kink_praise: 'Похвала',
@@ -322,6 +332,11 @@ const DICTIONARY = {
     curated: 'AI Curated',
     popular_today: 'Popular Today',
     view_all: 'View All',
+    for_you: 'For you',
+    based_on_search: 'Based on your searches',
+    because_you_like: 'Because you like',
+    because_you_watched: 'Because you watched',
+    popular_searches: 'Popular searches',
     
     // Empty States
     no_favorites: 'No favorites yet. Click the heart icon to add videos.',
@@ -454,6 +469,11 @@ const DICTIONARY = {
     // Geo Block
     access_denied: 'Access Denied',
     geo_restricted: 'This service is not available in your region.',
+    geo_restricted_reason_1: 'Your region may have legal restrictions and verification requirements related to adult content access.',
+    geo_restricted_reason_2: 'To minimize personal data collection, legal exposure, and compliance costs, we have disabled access from this region.',
+    geo_restricted_reason_3: 'We do not provide instructions to bypass regional restrictions.',
+    geo_detected_country: 'Detected region',
+    geo_open_policies: 'Open Policies / Legal',
 
     // Kinks
     kink_praise: 'Praise',
