@@ -5,6 +5,41 @@ const isAbortError = (e: unknown, signal?: AbortSignal) => {
   return e instanceof DOMException && e.name === 'AbortError';
 };
 
+const QUERY_SYNONYMS: Record<string, string> = {
+  'домашнее': 'homemade',
+  'домашка': 'homemade',
+  'любительское': 'amateur',
+  'частное': 'amateur',
+  'анал': 'anal',
+  'минет': 'blowjob',
+  'лесби': 'lesbian',
+  'лесбиянки': 'lesbian',
+  'гей': 'gay',
+  'блондинка': 'blonde',
+  'брюнетка': 'brunette',
+  'рыжая': 'redhead'
+};
+
+const normalizeTubeQuery = (query: string) => {
+  const trimmed = query.trim();
+  if (!trimmed) return trimmed;
+  const lower = trimmed.toLowerCase();
+  return QUERY_SYNONYMS[lower] || trimmed;
+};
+
+const isHtmlPayload = (value: string) => {
+  const trimmed = value.trim().toLowerCase();
+  return trimmed.startsWith('<!doctype') || trimmed.startsWith('<html');
+};
+
+const parseJsonResponse = async <T,>(response: Response) => {
+  const text = await response.text();
+  if (isHtmlPayload(text)) {
+    throw new Error('HTML response (blocked)');
+  }
+  return JSON.parse(text) as T;
+};
+
 // Interfaces for External APIs
 interface EpornerVideo {
   id: string;
@@ -133,9 +168,10 @@ export const TubeAdapter = {
       let order = 'top-weekly';
       if (sort === 'new') order = 'latest';
       if (sort === 'best') order = 'top-monthly'; // or top-alltime
+      const normalizedQuery = normalizeTubeQuery(query);
 
       // Use direct API call (Eporner has CORS enabled)
-      const API_URL = `https://www.eporner.com/api/v2/video/search/?query=${encodeURIComponent(query)}&per_page=${limit}&page=${page}&thumbsize=big&order=${order}&format=json`;
+      const API_URL = `https://www.eporner.com/api/v2/video/search/?query=${encodeURIComponent(normalizedQuery)}&per_page=${limit}&page=${page}&thumbsize=big&order=${order}&format=json`;
       
       console.log('[TubeAdapter] Eporner URL:', API_URL);
       
@@ -199,12 +235,13 @@ export const TubeAdapter = {
        let ordering = 'mostviewed'; // trending/default
        if (sort === 'new') ordering = 'newest';
        if (sort === 'best') ordering = 'rating';
+       const normalizedQuery = normalizeTubeQuery(query);
 
-       const API_URL = `https://www.pornhub.com/webmasters/search?search=${encodeURIComponent(query)}&page=${page}&thumbsize=large&ordering=${ordering}`;
+       const API_URL = `https://www.pornhub.com/webmasters/search?search=${encodeURIComponent(normalizedQuery)}&page=${page}&thumbsize=large&ordering=${ordering}`;
        
        const response = await fetch(PROXY + encodeURIComponent(API_URL), { signal });
        if (!response.ok) throw new Error('PH API response was not ok');
-       const data: PornhubResponse = await response.json();
+       const data: PornhubResponse = await parseJsonResponse(response);
        
        console.log('[TubeAdapter] Pornhub response videos:', data.videos?.length || 0);
 
@@ -294,7 +331,8 @@ export const TubeAdapter = {
 
   // XVIDEOS API (Scraper via Proxy)
   async fetchXVideos(query: string = 'best', page: number = 1, sort: 'trending' | 'new' | 'best' = 'trending', signal?: AbortSignal): Promise<Video[]> {
-    console.log('[TubeAdapter] fetchXVideos called:', { query, page, sort });
+    const normalizedQuery = normalizeTubeQuery(query);
+    console.log('[TubeAdapter] fetchXVideos called:', { query: normalizedQuery, page, sort });
     try {
       // XVideos search url. Page parameter is 'p'
       // Sort: relevance (default), uploaddate (new), rating (best)
@@ -302,7 +340,7 @@ export const TubeAdapter = {
       if (sort === 'new') sortParam = 'uploaddate';
       if (sort === 'best') sortParam = 'rating';
       
-      const TARGET_URL = `https://www.xvideos.com/?k=${encodeURIComponent(query)}&p=${page}&sort=${sortParam}`;
+      const TARGET_URL = `https://www.xvideos.com/?k=${encodeURIComponent(normalizedQuery)}&p=${page}&sort=${sortParam}`;
       
       console.log('[TubeAdapter] XVideos target URL:', TARGET_URL);
       
@@ -435,7 +473,7 @@ export const TubeAdapter = {
 
         const response = await fetch(PROXY + encodeURIComponent(API_URL), { signal });
         if (!response.ok) throw new Error('PH ID fetch failed');
-        const data: PornhubResponse = await response.json();
+        const data: PornhubResponse = await parseJsonResponse(response);
         const ph = data.videos.find(v => v.video_id === realId) || data.videos[0];
         if (!ph) return undefined;
 
