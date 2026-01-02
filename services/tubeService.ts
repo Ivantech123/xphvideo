@@ -8,36 +8,122 @@ const isAbortError = (e: unknown, signal?: AbortSignal) => {
 const QUERY_SYNONYMS: Record<string, string> = {
   'домашнее': 'homemade',
   'домашка': 'homemade',
+  'домашний': 'homemade',
+  'домашняя': 'homemade',
+  'домашние': 'homemade',
   'любительское': 'amateur',
-  'частное': 'amateur',
+  'любительский': 'amateur',
+  'любительская': 'amateur',
+  'любительские': 'amateur',
+  'любитель': 'amateur',
+  'любители': 'amateur',
+  'частное': 'private',
+  'частный': 'private',
+  'частная': 'private',
+  'частные': 'private',
+  'приват': 'private',
   'анал': 'anal',
+  'анальный': 'anal',
+  'анально': 'anal',
   'минет': 'blowjob',
+  'оральный': 'oral',
+  'оральное': 'oral',
+  'оральная': 'oral',
+  'орально': 'oral',
+  'кунилингус': 'cunnilingus',
+  'куни': 'cunnilingus',
   'лесби': 'lesbian',
+  'лесбиянка': 'lesbian',
   'лесбиянки': 'lesbian',
+  'лесбийский': 'lesbian',
   'гей': 'gay',
+  'геи': 'gay',
+  'гейский': 'gay',
+  'транс': 'trans',
+  'трансы': 'trans',
+  'транссексуал': 'trans',
+  'транссексуалка': 'trans',
   'блондинка': 'blonde',
+  'блондин': 'blonde',
+  'блондинки': 'blonde',
+  'блонди': 'blonde',
   'брюнетка': 'brunette',
-  'рыжая': 'redhead'
+  'брюнет': 'brunette',
+  'брюнетки': 'brunette',
+  'рыжая': 'redhead',
+  'рыжий': 'redhead',
+  'рыжие': 'redhead',
+  'азиатка': 'asian',
+  'азиатки': 'asian',
+  'азиатское': 'asian',
+  'латина': 'latina',
+  'латино': 'latina',
+  'латиноамериканка': 'latina',
+  'русское': 'russian',
+  'русский': 'russian',
+  'русская': 'russian',
+  'русские': 'russian',
+  'украинское': 'ukrainian',
+  'украинский': 'ukrainian',
+  'украинская': 'ukrainian',
+  'межрас': 'interracial',
+  'межрасовый': 'interracial',
+  'соло': 'solo',
+  'мастурбация': 'masturbation',
+  'мастурбирует': 'masturbation',
+  'фетиш': 'fetish',
+  'попа': 'ass',
+  'попка': 'ass',
+  'жопа': 'ass',
+  'жопка': 'ass',
+  'сиськи': 'boobs',
+  'титьки': 'boobs',
+  'грудь': 'boobs',
+  'соски': 'nipples',
+  'мамка': 'milf',
+  'мамки': 'milf',
+  'мамочка': 'milf',
+  'милф': 'milf',
+  'милфа': 'milf',
+  'пышка': 'bbw',
+  'пышные': 'bbw',
+  'толстая': 'bbw',
+  'толстые': 'bbw',
+  'жмж': 'threesome',
+  'мжм': 'threesome',
+  'мжж': 'threesome',
+  'тройничок': 'threesome',
+  'тройка': 'threesome',
+  'трое': 'threesome',
+  'оргия': 'orgy',
+  'групповуха': 'group',
+  'групповое': 'group',
+  'группа': 'group',
+  'сквирт': 'squirt',
+  'сквиртинг': 'squirt',
+  'камшот': 'cumshot',
+  'эбони': 'ebony',
+  'бдсм': 'bdsm',
+  'свинг': 'swingers',
+  'свингеры': 'swingers',
+  'эротика': 'erotic',
+  'порно': 'porn',
+  'секс': 'sex'
 };
 
 const normalizeTubeQuery = (query: string) => {
   const trimmed = query.trim();
   if (!trimmed) return trimmed;
   const lower = trimmed.toLowerCase();
-  return QUERY_SYNONYMS[lower] || trimmed;
+  const direct = QUERY_SYNONYMS[lower];
+  if (direct) return direct;
+  const replaced = lower.replace(/[\p{L}\p{N}]+/gu, (token) => QUERY_SYNONYMS[token] || token);
+  return replaced === lower ? trimmed : replaced;
 };
 
 const isHtmlPayload = (value: string) => {
   const trimmed = value.trim().toLowerCase();
   return trimmed.startsWith('<!doctype') || trimmed.startsWith('<html');
-};
-
-const parseJsonResponse = async <T,>(response: Response) => {
-  const text = await response.text();
-  if (isHtmlPayload(text)) {
-    throw new Error('HTML response (blocked)');
-  }
-  return JSON.parse(text) as T;
 };
 
 // Interfaces for External APIs
@@ -56,25 +142,40 @@ interface EpornerVideo {
   thumbs: { src: string; width: number; height: number }[];
 }
 
-// Robust Proxy Rotator
-const fetchWithProxy = async (targetUrl: string, signal?: AbortSignal): Promise<string> => {
-  const proxies = [
-    { name: 'corsproxy', url: (u: string) => `https://corsproxy.io/?${encodeURIComponent(u)}` },
-    { name: 'codetabs', url: (u: string) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}` },
-    { name: 'thingproxy', url: (u: string) => `https://thingproxy.freeboard.io/fetch/${u}` },
-    { name: 'allorigins', url: (u: string) => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`, json: true }
-  ];
+const PROXIES = [
+  { name: 'corsproxy', url: (u: string) => `https://corsproxy.io/?${encodeURIComponent(u)}` },
+  { name: 'codetabs', url: (u: string) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}` },
+  { name: 'allorigins', url: (u: string) => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`, json: true },
+  { name: 'jina', url: (u: string) => `https://r.jina.ai/http://${u.replace(/^https?:\/\//, '')}` },
+  { name: 'thingproxy', url: (u: string) => `https://thingproxy.freeboard.io/fetch/${u}` }
+];
 
-  for (const proxy of proxies) {
+type ProxyFetchOptions<T> = {
+  signal?: AbortSignal;
+  validate?: (text: string) => boolean;
+  parse?: (text: string) => T;
+};
+
+// Robust Proxy Rotator
+const fetchWithProxy = async <T = string>(targetUrl: string, options: ProxyFetchOptions<T> = {}): Promise<T> => {
+  const { signal, validate, parse } = options;
+  for (const proxy of PROXIES) {
     try {
       const res = await fetch(proxy.url(targetUrl), { signal });
       if (!res.ok) throw new Error(`Status ${res.status}`);
-      
+
+      let text = '';
       if (proxy.json) {
         const data = await res.json();
-        return data.contents; 
+        text = typeof data?.contents === 'string' ? data.contents : '';
+      } else {
+        text = await res.text();
       }
-      return await res.text();
+
+      if (!text) throw new Error('Empty response');
+      if (validate && !validate(text)) throw new Error('Validation failed');
+      if (parse) return parse(text);
+      return text as unknown as T;
     } catch (e) {
       if (isAbortError(e, signal)) throw e;
       console.warn(`[TubeService] Proxy ${proxy.name} failed:`, e);
@@ -82,6 +183,25 @@ const fetchWithProxy = async (targetUrl: string, signal?: AbortSignal): Promise<
   }
   throw new Error('All proxies failed');
 };
+
+const isBlockedHtml = (value: string) => {
+  const t = value.trim().toLowerCase();
+  return (
+    t.includes('access denied') ||
+    t.includes('cloudflare') ||
+    t.includes('captcha') ||
+    t.includes('attention required') ||
+    t.includes('ddos-guard') ||
+    t.includes('enable javascript')
+  );
+};
+
+const fetchJsonWithProxy = async <T,>(targetUrl: string, signal?: AbortSignal): Promise<T> =>
+  fetchWithProxy<T>(targetUrl, {
+    signal,
+    validate: (text) => !isHtmlPayload(text) && !isBlockedHtml(text),
+    parse: (text) => JSON.parse(text) as T
+  });
 
 const extractEmbedSrc = (embed: string | undefined | null): string => {
   const raw = (embed || '').trim();
@@ -184,10 +304,10 @@ export const TubeAdapter = {
       } catch {
         // Fallback to corsproxy
         console.log('[TubeAdapter] Eporner direct failed, trying corsproxy...');
-        const PROXY_URL = `https://corsproxy.io/?${encodeURIComponent(API_URL)}`;
-        const response = await fetch(PROXY_URL, { signal });
-        if (!response.ok) throw new Error('Proxy also failed');
-        data = await response.json();
+      const PROXY_URL = `https://corsproxy.io/?${encodeURIComponent(API_URL)}`;
+      const response = await fetch(PROXY_URL, { signal });
+      if (!response.ok) throw new Error('Proxy also failed');
+      data = await response.json();
       }
       
       return data.videos.map(ev => {
@@ -231,21 +351,18 @@ export const TubeAdapter = {
   // PORNHUB API
   async fetchPornhub(query: string = 'popular', page: number = 1, sort: 'trending' | 'new' | 'best' = 'trending', signal?: AbortSignal): Promise<Video[]> {
     try {
-       const PROXY = 'https://corsproxy.io/?'; 
        let ordering = 'mostviewed'; // trending/default
        if (sort === 'new') ordering = 'newest';
        if (sort === 'best') ordering = 'rating';
        const normalizedQuery = normalizeTubeQuery(query);
 
        const API_URL = `https://www.pornhub.com/webmasters/search?search=${encodeURIComponent(normalizedQuery)}&page=${page}&thumbsize=large&ordering=${ordering}`;
+       const data: PornhubResponse = await fetchJsonWithProxy(API_URL, signal);
        
-       const response = await fetch(PROXY + encodeURIComponent(API_URL), { signal });
-       if (!response.ok) throw new Error('PH API response was not ok');
-       const data: PornhubResponse = await parseJsonResponse(response);
-       
-       console.log('[TubeAdapter] Pornhub response videos:', data.videos?.length || 0);
+       const list = Array.isArray(data?.videos) ? data.videos : [];
+       console.log('[TubeAdapter] Pornhub response videos:', list.length);
 
-       return data.videos.map(ph => {
+       return list.map(ph => {
          // Use first pornstar name, or first category, or extract from title
          let creatorName = ph.pornstars?.[0]?.pornstar_name;
          if (!creatorName && ph.categories?.length > 0) {
@@ -289,7 +406,7 @@ export const TubeAdapter = {
 
     } catch (error) {
        if (isAbortError(error, signal)) throw error;
-       console.error("Failed to fetch from Pornhub:", error);
+       console.warn("Failed to fetch from Pornhub:", error);
        return [];
     }
   },
@@ -297,19 +414,7 @@ export const TubeAdapter = {
   async fetchPornstars(signal?: AbortSignal): Promise<Creator[]> {
     try {
        const API_URL = `https://www.pornhub.com/webmasters/pornstars`;
-
-       // Browser cannot call Pornhub directly (CORS + redirects). Proxy-only and best-effort.
-       const raw = await fetchWithProxy(API_URL, signal);
-       if (raw.trim().startsWith('<!DOCTYPE') || raw.trim().startsWith('<html')) {
-         throw new Error('Pornstars endpoint returned HTML (blocked)');
-       }
-
-       let data: PornhubPornstarResponse;
-       try {
-         data = JSON.parse(raw);
-       } catch {
-         throw new Error('Pornstars endpoint returned non-JSON response');
-       }
+       const data: PornhubPornstarResponse = await fetchJsonWithProxy(API_URL, signal);
 
        return data.pornstars.slice(0, 50).map(p => ({
          id: `star_${p.pornstar_name.replace(/\s+/g, '_')}`,
@@ -346,7 +451,10 @@ export const TubeAdapter = {
       
       let html: string;
       try {
-        html = await fetchWithProxy(TARGET_URL, signal);
+        html = await fetchWithProxy(TARGET_URL, {
+          signal,
+          validate: (text) => !isBlockedHtml(text)
+        });
       } catch (e) {
         if (isAbortError(e, signal)) throw e;
         console.error('[TubeAdapter] XVideos fetch failed:', e);
@@ -356,25 +464,34 @@ export const TubeAdapter = {
       const parser = new DOMParser();
       const doc = parser.parseFromString(html, 'text/html');
       
-      const nodes = Array.from(doc.querySelectorAll('.thumb-block'));
+      const nodes = Array.from(doc.querySelectorAll('.thumb-block, .thumb-block-wide, .thumb'));
       
       return nodes
         .slice(0, 12)
         .map((node: Element) => {
-          const id = node.getAttribute('data-id');
+          let id = node.getAttribute('data-id') || node.getAttribute('data-video-id') || '';
+          if (!id) {
+            const href = node.querySelector('a')?.getAttribute('href') || '';
+            const m = href.match(/video(\d+)/i);
+            id = m?.[1] || '';
+          }
           if (!id) return null;
 
-          const titleEl = node.querySelector('.title a');
-          const title = titleEl?.textContent || 'Untitled';
+          const titleEl = node.querySelector('.title a, .title, a[title]');
+          const title = titleEl?.getAttribute('title') || titleEl?.textContent || 'Untitled';
           const thumbEl = node.querySelector('img');
-          let thumbnail = thumbEl?.getAttribute('data-src') || thumbEl?.getAttribute('src') || '';
+          let thumbnail =
+            thumbEl?.getAttribute('data-src') ||
+            thumbEl?.getAttribute('data-original') ||
+            thumbEl?.getAttribute('src') ||
+            '';
 
           if (thumbnail.includes('THUMBNUM')) {
             thumbnail = thumbnail.replace('THUMBNUM', '1');
           }
 
           const durationEl = node.querySelector('.duration');
-          const durationStr = durationEl?.textContent || '0 min';
+          const durationStr = durationEl?.textContent || node.getAttribute('data-duration') || '0 min';
           let duration = 0;
           if (durationStr.includes('h')) duration += parseInt(durationStr) * 3600;
           else if (durationStr.includes('min')) duration += parseInt(durationStr) * 60;
@@ -468,13 +585,11 @@ export const TubeAdapter = {
     if (id.startsWith('ph_')) {
       const realId = id.replace('ph_', '');
       try {
-        const PROXY = 'https://corsproxy.io/?';
         const API_URL = `https://www.pornhub.com/webmasters/search?search=${encodeURIComponent(realId)}&thumbsize=large`;
 
-        const response = await fetch(PROXY + encodeURIComponent(API_URL), { signal });
-        if (!response.ok) throw new Error('PH ID fetch failed');
-        const data: PornhubResponse = await parseJsonResponse(response);
-        const ph = data.videos.find(v => v.video_id === realId) || data.videos[0];
+        const data: PornhubResponse = await fetchJsonWithProxy(API_URL, signal);
+        const list = Array.isArray(data?.videos) ? data.videos : [];
+        const ph = list.find(v => v.video_id === realId) || list[0];
         if (!ph) return undefined;
 
         let creatorName = ph.pornstars?.[0]?.pornstar_name;
@@ -522,7 +637,10 @@ export const TubeAdapter = {
       try {
         const TARGET_URL = `https://www.xvideos.com/video${realId}`;
         
-        const html = await fetchWithProxy(TARGET_URL, signal);
+        const html = await fetchWithProxy(TARGET_URL, {
+          signal,
+          validate: (text) => !isBlockedHtml(text)
+        });
 
         const parser = new DOMParser();
         const doc = parser.parseFromString(html, 'text/html');
