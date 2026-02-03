@@ -4,40 +4,44 @@ import { Icon } from './Icon';
 import { useLanguage } from '../contexts/LanguageContext';
 
 export const GeoBlock: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  console.log('[GeoBlock] Component rendering...');
+  const log = (...args: any[]) => {
+    if (import.meta.env.DEV) console.log(...args);
+  };
+
+  log('[GeoBlock] Component rendering...');
   const { t } = useLanguage();
   const [blocked, setBlocked] = useState<boolean>(false); // Default to allowed to show UI immediately
   const [country, setCountry] = useState<string | null>(null);
 
   useEffect(() => {
     const check = async () => {
-      console.log('[GeoBlock] Starting geo check...');
+      log('[GeoBlock] Starting geo check...');
       // Check local storage first
       const cached = localStorage.getItem('velvet_geo_country');
-      console.log('[GeoBlock] Cached country:', cached);
+      log('[GeoBlock] Cached country:', cached);
       if (cached) {
         setCountry(cached);
         if (CIS_COUNTRIES.includes(cached)) {
-          console.log('[GeoBlock] CIS country detected from cache, blocking');
+          log('[GeoBlock] CIS country detected from cache, blocking');
           setBlocked(true);
         } else {
-          console.log('[GeoBlock] Non-CIS country from cache, allowing');
+          log('[GeoBlock] Non-CIS country from cache, allowing');
         }
         return;
       }
 
       try {
-        console.log('[GeoBlock] Fetching country from API...');
+        log('[GeoBlock] Fetching country from API...');
         const country = await GeoService.getCountryCode();
-        console.log('[GeoBlock] API returned country:', country);
+        log('[GeoBlock] API returned country:', country);
         if (country) {
           localStorage.setItem('velvet_geo_country', country);
           setCountry(country);
           if (CIS_COUNTRIES.includes(country)) {
-            console.log('[GeoBlock] CIS country detected, blocking');
+            log('[GeoBlock] CIS country detected, blocking');
             setBlocked(true);
           } else {
-            console.log('[GeoBlock] Non-CIS country, allowing');
+            log('[GeoBlock] Non-CIS country, allowing');
           }
         }
       } catch (e) {

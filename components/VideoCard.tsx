@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Video } from '../types';
 import { Icon } from './Icon';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -12,7 +12,6 @@ interface VideoCardProps {
 
 export const VideoCard: React.FC<VideoCardProps> = ({ video, compact = false, onClick, onCreatorClick }) => {
   const { t } = useLanguage();
-  const [isHovered, setIsHovered] = useState(false);
 
   const handleCreatorClick = (e: React.MouseEvent) => {
     if (onCreatorClick) {
@@ -37,7 +36,14 @@ export const VideoCard: React.FC<VideoCardProps> = ({ video, compact = false, on
     return (
       <div onClick={onClick} className="flex gap-2 cursor-pointer group hover:bg-brand-surface p-2 rounded transition">
         <div className="relative w-40 h-24 flex-shrink-0 overflow-hidden rounded-md bg-gray-800">
-           <img src={video.thumbnail} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition" alt="" />
+           <img
+             src={video.thumbnail}
+             className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition"
+             alt={video.title}
+             loading="lazy"
+             decoding="async"
+             draggable={false}
+           />
            <span className="absolute bottom-1 right-1 bg-black/80 text-white text-[10px] font-bold px-1 rounded">
              {formatTime(video.duration)}
            </span>
@@ -57,19 +63,20 @@ export const VideoCard: React.FC<VideoCardProps> = ({ video, compact = false, on
     <div 
       onClick={onClick} 
       className="flex flex-col gap-2 cursor-pointer group relative"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
     >
       {/* Thumbnail Container */}
       <div className="relative aspect-video rounded-lg overflow-hidden bg-gray-900 border border-white/5 group-hover:border-brand-gold/30 transition-colors">
         <img 
           src={video.thumbnail} 
           alt={video.title} 
-          className={`w-full h-full object-cover transition duration-500 ease-out ${isHovered ? 'scale-105 opacity-60' : 'opacity-100'}`}
+          className="w-full h-full object-cover transition duration-500 ease-out opacity-100 scale-100 group-hover:scale-105 group-hover:opacity-60"
+          loading="lazy"
+          decoding="async"
+          draggable={false}
         />
         
         {/* Play Icon on Hover - Strong CTA */}
-        <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 ${isHovered ? 'opacity-100' : 'opacity-0'}`}>
+        <div className="absolute inset-0 flex items-center justify-center transition-opacity duration-300 opacity-0 group-hover:opacity-100">
            <Icon name="PlayCircle" size={48} className="text-white drop-shadow-lg" fill="rgba(0,0,0,0.5)" />
         </div>
 
@@ -88,7 +95,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({ video, compact = false, on
         {/* Hover Progress Bar Simulation - Classic "Tube" feature */}
         <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-800/50">
           <div 
-            className={`h-full bg-brand-gold transition-all duration-[2000ms] ease-linear ${isHovered ? 'w-full' : 'w-0'}`} 
+            className="h-full bg-brand-gold transition-all duration-[2000ms] ease-linear w-0 group-hover:w-full"
           />
         </div>
       </div>

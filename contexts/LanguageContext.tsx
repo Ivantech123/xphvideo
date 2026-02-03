@@ -37,6 +37,7 @@ const DICTIONARY = {
     loading: 'Загрузка...',
     loading_suggestions: 'Загрузка рекомендаций...',
     admin: 'Админка',
+    legal_editor: 'Юридический редактор',
     ad: 'Реклама',
     sponsor: 'Спонсор',
     
@@ -306,6 +307,7 @@ const DICTIONARY = {
     loading: 'Loading...',
     loading_suggestions: 'Loading suggestions...',
     admin: 'Admin',
+    legal_editor: 'Legal editor',
     ad: 'Ad',
     sponsor: 'Sponsor',
 

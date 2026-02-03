@@ -338,7 +338,7 @@ export const TubeAdapter = {
       // Use direct API call (Eporner has CORS enabled)
       const API_URL = `https://www.eporner.com/api/v2/video/search/?query=${encodeURIComponent(normalizedQuery)}&per_page=${limit}&page=${page}&thumbsize=big&order=${order}&format=json`;
       
-      console.log('[TubeAdapter] Eporner URL:', API_URL);
+      if (import.meta.env.DEV) console.log('[TubeAdapter] Eporner URL:', API_URL);
       
       let data: EpornerResponse;
       try {
@@ -348,7 +348,7 @@ export const TubeAdapter = {
         data = await response.json();
       } catch {
         // Fallback to corsproxy
-        console.log('[TubeAdapter] Eporner direct failed, trying corsproxy...');
+        if (import.meta.env.DEV) console.log('[TubeAdapter] Eporner direct failed, trying corsproxy...');
       const PROXY_URL = `https://corsproxy.io/?${encodeURIComponent(API_URL)}`;
       const response = await fetch(PROXY_URL, { signal });
       if (!response.ok) throw new Error('Proxy also failed');
@@ -406,7 +406,7 @@ export const TubeAdapter = {
        const data: PornhubResponse = await fetchJsonWithProxy(API_URL, signal);
        
        const list = Array.isArray(data?.videos) ? data.videos : [];
-       console.log('[TubeAdapter] Pornhub response videos:', list.length);
+       if (import.meta.env.DEV) console.log('[TubeAdapter] Pornhub response videos:', list.length);
 
        return list.map(ph => {
          // Use first pornstar name, or first category, or extract from title
@@ -483,7 +483,7 @@ export const TubeAdapter = {
   // XVIDEOS API (Scraper via Proxy)
   async fetchXVideos(query: string = 'best', page: number = 1, sort: 'trending' | 'new' | 'best' = 'trending', signal?: AbortSignal): Promise<Video[]> {
     const normalizedQuery = normalizeTubeQuery(query);
-    console.log('[TubeAdapter] fetchXVideos called:', { query: normalizedQuery, page, sort });
+    if (import.meta.env.DEV) console.log('[TubeAdapter] fetchXVideos called:', { query: normalizedQuery, page, sort });
     try {
       // XVideos search url. Page parameter is 'p'
       // Sort: relevance (default), uploaddate (new), rating (best)
@@ -493,7 +493,7 @@ export const TubeAdapter = {
       
       const TARGET_URL = `https://www.xvideos.com/?k=${encodeURIComponent(normalizedQuery)}&p=${page}&sort=${sortParam}`;
       
-      console.log('[TubeAdapter] XVideos target URL:', TARGET_URL);
+      if (import.meta.env.DEV) console.log('[TubeAdapter] XVideos target URL:', TARGET_URL);
       
       let html: string;
       try {

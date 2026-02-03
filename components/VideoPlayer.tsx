@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Video } from '../types';
 import { Icon } from './Icon';
 import { AdUnit } from './AdUnit';
@@ -29,6 +29,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose, onVide
   const [currentTime, setCurrentTime] = useState(0);
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const watchStartRef = useRef<number>(Date.now());
+  const lastTimeUpdateSecRef = useRef<number>(-1);
 
   const [reportOpen, setReportOpen] = useState(false);
   const [reportType, setReportType] = useState<TicketType>('report');
@@ -46,28 +47,37 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose, onVide
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
-  useEffect(() => {
-    if (videoRef.current) {
-        if (isPlaying) {
-            videoRef.current.play().catch(() => {});
-        } else {
-            videoRef.current.pause();
-        }
-    }
-  }, [isPlaying]);
+  const requestPlay = useCallback(() => {
+    const el = videoRef.current;
+    setIsPlaying(true);
+    if (!el) return;
+    el.play().catch(() => setIsPlaying(false));
+  }, []);
 
-  useEffect(() => {
-    if (videoRef.current) {
-        videoRef.current.muted = isMuted;
+  const requestPause = useCallback(() => {
+    const el = videoRef.current;
+    if (el) el.pause();
+    setIsPlaying(false);
+  }, []);
+
+  const togglePlay = useCallback(() => {
+    const el = videoRef.current;
+    if (!el) {
+      setIsPlaying((p) => !p);
+      return;
     }
-  }, [isMuted]);
+    if (el.paused) requestPlay();
+    else requestPause();
+  }, [requestPause, requestPlay]);
 
   useEffect(() => {
     // Reset states when video changes to prevent leaking state from previous video
+    requestPause();
     setIsSubscribed(false);
     setIsFavorite(false);
     setRelatedVideos([]);
     setCurrentTime(0);
+    lastTimeUpdateSecRef.current = -1;
 
     // Track video view for recommendations
     RecommendationService.trackView(video);
@@ -121,7 +131,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose, onVide
       } catch {}
       controller.abort();
     };
-  }, [video, user]);
+  }, [video, user, requestPause]);
 
   const submitReport = async () => {
     setReportError(null);
@@ -195,14 +205,14 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose, onVide
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'TEXTAREA') return;
       switch(e.code) {
-        case 'Space': case 'KeyK': e.preventDefault(); setIsPlaying(p => !p); break;
+        case 'Space': case 'KeyK': e.preventDefault(); togglePlay(); break;
         case 'KeyM': setIsMuted(m => !m); break;
         case 'Escape': onClose(); break;
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+  }, [onClose, togglePlay]);
 
 
   return (
@@ -358,14 +368,24 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose, onVide
                     poster={video.thumbnail}
                     className={`w-full h-full object-cover transition-all duration-500 ${isBlurred ? 'blur-3xl opacity-50' : 'opacity-100'}`}
                     ref={videoRef}
-                    onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+                    onTimeUpdate={(e) => {
+                      const t = e.currentTarget.currentTime;
+                      const sec = Math.floor(t);
+                      if (sec !== lastTimeUpdateSecRef.current) {
+                        lastTimeUpdateSecRef.current = sec;
+                        setCurrentTime(t);
+                      }
+                    }}
+                    preload="metadata"
+                    playsInline
+                    muted={isMuted}
                     loop
                 />
                  
                  {!isBlurred && (
                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                       {!isPlaying && (
-                      <button onClick={() => setIsPlaying(true)} className="pointer-events-auto w-20 h-20 bg-brand-gold/90 rounded-full flex items-center justify-center text-black hover:scale-110 hover:bg-brand-gold transition shadow-[0_0_30px_rgba(212,175,55,0.4)]">
+                      <button onClick={requestPlay} className="pointer-events-auto w-20 h-20 bg-brand-gold/90 rounded-full flex items-center justify-center text-black hover:scale-110 hover:bg-brand-gold transition shadow-[0_0_30px_rgba(212,175,55,0.4)]">
                          <Icon name="Play" size={36} fill="currentColor" className="ml-1" />
                       </button>
                       )}
@@ -375,8 +395,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose, onVide
                  {/* Controls Overlay */}
                  <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-black/80 to-transparent px-4 flex items-center justify-between z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                     <div className="flex items-center gap-3">
-                       <button onClick={() => setIsPlaying(!isPlaying)} className="text-white hover:text-brand-gold"><Icon name={isPlaying ? "Pause" : "Play"} size={20} fill="currentColor" /></button>
-                       <button onClick={() => setIsMuted(!isMuted)} className="text-white hover:text-brand-gold"><Icon name={isMuted ? "VolumeX" : "Volume2"} size={20} /></button>
+                       <button onClick={togglePlay} className="text-white hover:text-brand-gold"><Icon name={isPlaying ? "Pause" : "Play"} size={20} fill="currentColor" /></button>
+                       <button onClick={() => setIsMuted((m) => !m)} className="text-white hover:text-brand-gold"><Icon name={isMuted ? "VolumeX" : "Volume2"} size={20} /></button>
                        <div className="text-white text-xs font-mono">{formatTime(currentTime)} / {formatTime(video.duration)}</div>
                     </div>
                     <div className="flex gap-4 items-center">

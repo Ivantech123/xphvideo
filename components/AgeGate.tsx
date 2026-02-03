@@ -1,26 +1,78 @@
 import React, { useState } from 'react';
 import { Icon } from './Icon';
-import { LegalModal } from './LegalModal';
 import { useLanguage } from '../contexts/LanguageContext';
 
+const LegalModal = React.lazy(() => import('./LegalModal').then((m) => ({ default: m.LegalModal })));
+
 interface AgeGateProps {
-  onVerify: () => void;
+  onVerify: (opts?: { remember?: boolean; method?: 'dob' | 'confirm' }) => void;
 }
 
 export const AgeGate: React.FC<AgeGateProps> = ({ onVerify }) => {
   // Safe fallback if context isn't ready
   let t = (k: string) => k;
+  let lang: 'ru' | 'en' = 'en';
   try {
      const ctx = useLanguage();
      t = ctx.t;
+     lang = ctx.lang;
   } catch(e) {}
 
   const [isExiting, setIsExiting] = useState(false);
   const [showPolicy, setShowPolicy] = useState(false);
+  const [policyTab, setPolicyTab] = useState<'terms' | 'privacy'>('terms');
+  const [dob, setDob] = useState('');
+  const [agree, setAgree] = useState(false);
+  const [remember, setRemember] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const handleExit = () => {
     setIsExiting(true);
     window.location.href = 'https://www.google.com';
+  };
+
+  const computeAge = (isoDate: string) => {
+    // isoDate expected as YYYY-MM-DD from <input type="date">
+    const parts = isoDate.split('-').map((p) => Number(p));
+    if (parts.length !== 3) return null;
+    const [y, m, d] = parts;
+    if (!y || !m || !d) return null;
+
+    const birth = new Date(y, m - 1, d);
+    if (Number.isNaN(birth.getTime())) return null;
+
+    const now = new Date();
+    let age = now.getFullYear() - birth.getFullYear();
+    const monthDelta = now.getMonth() - birth.getMonth();
+    if (monthDelta < 0 || (monthDelta === 0 && now.getDate() < birth.getDate())) {
+      age -= 1;
+    }
+    return age;
+  };
+
+  const handleEnter = () => {
+    setError(null);
+
+    const age = computeAge(dob);
+    if (age === null) {
+      setError(lang === 'ru' ? 'Укажите дату рождения.' : 'Please enter your date of birth.');
+      return;
+    }
+    if (age < 18) {
+      setError(lang === 'ru' ? 'Доступ запрещён: только 18+.' : 'Access denied: 18+ only.');
+      setTimeout(handleExit, 1200);
+      return;
+    }
+    if (!agree) {
+      setError(
+        lang === 'ru'
+          ? 'Подтвердите, что вам 18+ и вы принимаете условия и политику.'
+          : 'Please confirm you are 18+ and accept the terms and privacy policy.'
+      );
+      return;
+    }
+
+    onVerify({ remember, method: 'dob' });
   };
 
   return (
@@ -54,9 +106,59 @@ export const AgeGate: React.FC<AgeGateProps> = ({ onVerify }) => {
             </p>
           </div>
 
+          <div className="space-y-4 mb-6 text-left">
+            <div>
+              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2 block">
+                {lang === 'ru' ? 'Дата рождения' : 'Date of birth'}
+              </label>
+              <input
+                type="date"
+                value={dob}
+                onChange={(e) => setDob(e.target.value)}
+                className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white focus:border-brand-gold outline-none transition"
+                max={new Date().toISOString().slice(0, 10)}
+              />
+              <div className="text-[10px] text-gray-500 mt-2">
+                {lang === 'ru'
+                  ? 'Дата рождения не сохраняется — используется только для расчёта возраста.'
+                  : 'DOB is not stored — it is only used to calculate your age.'}
+              </div>
+            </div>
+
+            <label className="flex items-start gap-3 text-xs text-gray-400 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={agree}
+                onChange={(e) => setAgree(e.target.checked)}
+                className="mt-1 w-4 h-4 accent-[#D4AF37]"
+              />
+              <span>
+                {lang === 'ru'
+                  ? 'Подтверждаю, что мне 18+ и я принимаю условия использования и политику конфиденциальности.'
+                  : 'I confirm I am 18+ and accept the Terms of Service and Privacy Policy.'}
+              </span>
+            </label>
+
+            <label className="flex items-center gap-3 text-xs text-gray-500 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={remember}
+                onChange={(e) => setRemember(e.target.checked)}
+                className="w-4 h-4 accent-[#D4AF37]"
+              />
+              <span>{lang === 'ru' ? 'Запомнить на этом устройстве (30 дней)' : 'Remember on this device (30 days)'}</span>
+            </label>
+
+            {error && (
+              <div className="bg-red-900/10 border border-red-500/20 text-red-200 text-xs p-3 rounded">
+                {error}
+              </div>
+            )}
+          </div>
+
           <div className="flex flex-col gap-3">
             <button 
-              onClick={onVerify}
+              onClick={handleEnter}
               className="w-full bg-brand-gold hover:bg-[#b5952f] text-black font-bold py-4 px-6 rounded uppercase tracking-widest transition duration-300 shadow-lg transform hover:scale-[1.01] text-sm"
             >
               {t('enter_site')}
@@ -70,15 +172,19 @@ export const AgeGate: React.FC<AgeGateProps> = ({ onVerify }) => {
           </div>
           
           <div className="mt-8 pt-6 border-t border-white/5 flex flex-wrap justify-center gap-4 text-[10px] text-gray-500 uppercase tracking-wider font-bold">
-             <button onClick={() => setShowPolicy(true)} className="hover:text-brand-gold transition">{t('terms_short')}</button>
+             <button onClick={() => { setPolicyTab('terms'); setShowPolicy(true); }} className="hover:text-brand-gold transition">{t('terms_short')}</button>
              <span>•</span>
-             <button onClick={() => setShowPolicy(true)} className="hover:text-brand-gold transition">{t('privacy_short')}</button>
+             <button onClick={() => { setPolicyTab('privacy'); setShowPolicy(true); }} className="hover:text-brand-gold transition">{t('privacy_short')}</button>
              <span>•</span>
              <span className="text-gray-600 cursor-default">RTA</span>
           </div>
         </div>
       </div>
-      {showPolicy && <LegalModal onClose={() => setShowPolicy(false)} />}
+      {showPolicy && (
+        <React.Suspense fallback={<div className="fixed inset-0 z-[9999] bg-black flex items-center justify-center"><Icon name="Loader2" className="animate-spin text-brand-gold" /></div>}>
+          <LegalModal initialTab={policyTab} onClose={() => setShowPolicy(false)} />
+        </React.Suspense>
+      )}
     </>
   );
 };

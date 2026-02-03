@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { SubscriptionService, Subscription } from '../services/subscriptionService';
 import { AdUnit } from './AdUnit';
 
-type ViewType = 'home' | 'models' | 'categories' | 'favorites' | 'history' | 'admin' | 'shorts';
+type ViewType = 'home' | 'models' | 'categories' | 'favorites' | 'history' | 'admin' | 'shorts' | 'legal';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -21,7 +21,7 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile = false, currentView, onChangeView, onRequestClose, onOpenLegal, onCreatorClick, onSearch, searchQuery = '' }) => {
   const { t } = useLanguage();
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, isLegalEditor } = useAuth();
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   
   useEffect(() => {
@@ -49,6 +49,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile = false, curr
     { id: 'favorites', icon: 'Heart', label: t('favorites') },
     { id: 'history', icon: 'History', label: t('history') },
   ];
+
+  if (isLegalEditor) {
+    SECONDARY_ITEMS.push({ id: 'legal', icon: 'FileText', label: t('legal_editor') });
+  }
 
   if (isAdmin) {
     SECONDARY_ITEMS.push({ id: 'admin', icon: 'Shield', label: t('admin') });

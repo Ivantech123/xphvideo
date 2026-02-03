@@ -3,11 +3,9 @@ import { HashRouter as Router, useSearchParams } from 'react-router-dom';
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
 import { VideoCard } from './components/VideoCard';
-import { VideoPlayer } from './components/VideoPlayer';
 import { AgeGate } from './components/AgeGate';
 import { BossMode } from './components/BossMode';
 import { Footer } from './components/Footer';
-import { LegalModal } from './components/LegalModal';
 import { Icon } from './components/Icon';
 import { CATEGORIES_GENERAL, CATEGORIES_HIM, CATEGORIES_HER, CATEGORIES_COUPLES, CATEGORIES_GAY, CATEGORIES_TRANS, CATEGORIES_LESBIAN, POPULAR_SEARCHES } from './constants';
 import { Video, UserMode, Creator } from './types';
@@ -17,12 +15,16 @@ import { SearchService } from './services/searchService';
 import { RecommendationService } from './services/recommendationService';
 import { GeoBlock } from './components/GeoBlock';
 import { AuthProvider } from './contexts/AuthContext';
-import { AuthModal } from './components/AuthModal';
-import { ProfileView } from './components/ProfileView';
-import { UserProfile } from './components/UserProfile';
 import { AdUnit } from './components/AdUnit';
-import { ShortsView } from './components/ShortsView';
-import { AdminDashboard } from './components/AdminDashboard';
+
+const VideoPlayer = React.lazy(() => import('./components/VideoPlayer').then((m) => ({ default: m.VideoPlayer })));
+const ProfileView = React.lazy(() => import('./components/ProfileView').then((m) => ({ default: m.ProfileView })));
+const UserProfile = React.lazy(() => import('./components/UserProfile').then((m) => ({ default: m.UserProfile })));
+const LegalModal = React.lazy(() => import('./components/LegalModal').then((m) => ({ default: m.LegalModal })));
+const AuthModal = React.lazy(() => import('./components/AuthModal').then((m) => ({ default: m.AuthModal })));
+const ShortsView = React.lazy(() => import('./components/ShortsView').then((m) => ({ default: m.ShortsView })));
+const AdminDashboard = React.lazy(() => import('./components/AdminDashboard').then((m) => ({ default: m.AdminDashboard })));
+const LegalEditorDashboard = React.lazy(() => import('./components/LegalEditorDashboard').then((m) => ({ default: m.LegalEditorDashboard })));
 
 // --- NEW PAGES (Internal Components for cleaner file) ---
 
@@ -68,7 +70,7 @@ interface HomeProps {
   onVideoClick: (v: Video) => void;
   onCreatorClick: (c: Creator) => void;
   userMode: UserMode;
-  currentView: 'home' | 'models' | 'categories' | 'favorites' | 'history' | 'shorts' | 'admin';
+  currentView: 'home' | 'models' | 'categories' | 'favorites' | 'history' | 'shorts' | 'admin' | 'legal';
   onOpenLegal: () => void;
   searchQuery: string;
   setSearchQuery: (q: string) => void;
@@ -135,7 +137,7 @@ interface HomeProps {
       setVideos(VideoService.getHistory());
       return;
     }
-    if (currentView === 'categories' || currentView === 'admin' || currentView === 'shorts') {
+    if (currentView === 'categories' || currentView === 'admin' || currentView === 'shorts' || currentView === 'legal') {
       setLoading(false);
       return;
     }
@@ -386,6 +388,14 @@ interface HomeProps {
                 />
             </React.Suspense>
         </div>
+    );
+  }
+
+  if (currentView === 'legal') {
+    return (
+      <React.Suspense fallback={<div className="flex items-center justify-center h-screen"><Icon name="Loader2" className="animate-spin text-brand-gold" /></div>}>
+        <LegalEditorDashboard />
+      </React.Suspense>
     );
   }
 
@@ -659,7 +669,7 @@ const VelvetApp = () => {
   const [activeCategory, setActiveCategory] = useState('All');
   
   // Navigation State
-  const [currentView, setCurrentView] = useState<'home'|'models'|'categories'|'favorites'|'history'|'shorts'|'admin'>('home');
+  const [currentView, setCurrentView] = useState<'home'|'models'|'categories'|'favorites'|'history'|'shorts'|'admin'|'legal'>('home');
 
   const searchParamsKey = searchParams.toString();
 
@@ -741,12 +751,39 @@ const VelvetApp = () => {
   }, [currentVideo, currentCreator, searchQuery, searchParamsKey]);
 
   useEffect(() => {
-    const verified = localStorage.getItem('velvet_age_verified');
-    setIsVerified(verified === 'true');
+    const TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+    const readVerified = () => {
+      const storages: Storage[] = [sessionStorage, localStorage];
+      for (const storage of storages) {
+        try {
+          const verified = storage.getItem('velvet_age_verified');
+          if (verified !== 'true') continue;
+          const at = Number(storage.getItem('velvet_age_verified_at') || '0');
+          if (!at) return true; // legacy (no timestamp)
+          if (Date.now() - at < TTL_MS) return true;
+          // Expired – clear stale flags so the gate can re-run cleanly.
+          storage.removeItem('velvet_age_verified');
+          storage.removeItem('velvet_age_verified_at');
+          storage.removeItem('velvet_age_verified_method');
+          storage.removeItem('velvet_age_verified_v');
+        } catch {}
+      }
+      return false;
+    };
+
+    setIsVerified(readVerified());
   }, []);
 
-  const handleVerification = () => {
-    localStorage.setItem('velvet_age_verified', 'true');
+  const handleVerification = (opts?: { remember?: boolean; method?: 'dob' | 'confirm' }) => {
+    const remember = opts?.remember !== false;
+    const storage = remember ? localStorage : sessionStorage;
+    try {
+      storage.setItem('velvet_age_verified', 'true');
+      storage.setItem('velvet_age_verified_at', String(Date.now()));
+      storage.setItem('velvet_age_verified_method', String(opts?.method || 'confirm'));
+      storage.setItem('velvet_age_verified_v', '2');
+    } catch {}
     setIsVerified(true);
   };
 
@@ -873,9 +910,21 @@ const VelvetApp = () => {
           <BossMode isActive={isBossMode} onExit={() => setIsBossMode(false)} />
           {!isVerified && <AgeGate onVerify={handleVerification} />}
           
-          {isLegalOpen && <LegalModal onClose={() => setIsLegalOpen(false)} />}
-          {isAuthOpen && <AuthModal onClose={() => setIsAuthOpen(false)} />}
-          {isProfileOpen && <UserProfile onClose={() => setIsProfileOpen(false)} onVideoClick={(v) => { setCurrentVideo(v); setIsProfileOpen(false); }} />}
+          {isLegalOpen && (
+            <React.Suspense fallback={<div className="fixed inset-0 z-[9999] bg-black flex items-center justify-center"><Icon name="Loader2" className="animate-spin text-brand-gold" /></div>}>
+              <LegalModal onClose={() => setIsLegalOpen(false)} />
+            </React.Suspense>
+          )}
+          {isAuthOpen && (
+            <React.Suspense fallback={<div className="fixed inset-0 z-[100] bg-black flex items-center justify-center"><Icon name="Loader2" className="animate-spin text-brand-gold" /></div>}>
+              <AuthModal onClose={() => setIsAuthOpen(false)} />
+            </React.Suspense>
+          )}
+          {isProfileOpen && (
+            <React.Suspense fallback={<div className="fixed inset-0 z-[100] bg-black flex items-center justify-center"><Icon name="Loader2" className="animate-spin text-brand-gold" /></div>}>
+              <UserProfile onClose={() => setIsProfileOpen(false)} onVideoClick={(v) => { setCurrentVideo(v); setIsProfileOpen(false); }} />
+            </React.Suspense>
+          )}
 
           <div className={`transition-opacity duration-500 ${!isVerified ? 'opacity-0 h-0 overflow-hidden' : 'opacity-100'}`}>
              <Navbar 
@@ -908,18 +957,22 @@ const VelvetApp = () => {
 
              <main className={`pt-16 transition-all duration-300 ${isSidebarOpen ? 'md:ml-60' : 'md:ml-20'}`}>
                 {currentVideo ? (
-                  <VideoPlayer 
-                    video={currentVideo} 
-                    onClose={() => setCurrentVideo(null)} 
-                    onVideoChange={handleVideoClick}
-                    onCreatorClick={handleCreatorClick}
-                  />
+                  <React.Suspense fallback={<div className="flex items-center justify-center h-[60vh]"><Icon name="Loader2" className="animate-spin text-brand-gold" /></div>}>
+                    <VideoPlayer 
+                      video={currentVideo} 
+                      onClose={() => setCurrentVideo(null)} 
+                      onVideoChange={handleVideoClick}
+                      onCreatorClick={handleCreatorClick}
+                    />
+                  </React.Suspense>
                 ) : currentCreator ? (
-                  <ProfileView 
-                    creator={currentCreator} 
-                    onVideoClick={handleVideoClick} 
-                    onBack={() => setCurrentCreator(null)} 
-                  />
+                  <React.Suspense fallback={<div className="flex items-center justify-center h-[60vh]"><Icon name="Loader2" className="animate-spin text-brand-gold" /></div>}>
+                    <ProfileView 
+                      creator={currentCreator} 
+                      onVideoClick={handleVideoClick} 
+                      onBack={() => setCurrentCreator(null)} 
+                    />
+                  </React.Suspense>
                 ) : (
                   <MainContent 
                     onVideoClick={handleVideoClick}

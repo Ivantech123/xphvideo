@@ -2,11 +2,12 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, AuthService } from '../services/authService';
 import { supabase } from '../services/supabase';
 
-console.log('[AuthContext] Module loaded, supabase:', supabase ? 'initialized' : 'null');
+if (import.meta.env.DEV) console.log('[AuthContext] Module loaded, supabase:', supabase ? 'initialized' : 'null');
 
 interface AuthContextType {
   user: User | null;
   isAdmin: boolean;
+  isLegalEditor: boolean;
   loading: boolean;
   login: (email: string, pass: string) => Promise<string | null>;
   register: (email: string, pass: string) => Promise<string | null>;
@@ -18,14 +19,26 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isLegalEditor, setIsLegalEditor] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  const computeRoles = (email: string | null | undefined) => {
+    const normalized = (email || '').trim().toLowerCase();
+    const adminEmail = 'abloko362@gmail.com';
+    const legalEditors = new Set([adminEmail, '8272@mail.ru']);
+    return {
+      isAdmin: normalized === adminEmail,
+      isLegalEditor: legalEditors.has(normalized),
+    };
+  };
 
   useEffect(() => {
     // Use Supabase auth
     AuthService.getCurrentUser().then(u => {
       setUser(u);
-      if (u && u.email === 'abloko362@gmail.com') setIsAdmin(true);
-      else setIsAdmin(false);
+      const roles = computeRoles(u?.email);
+      setIsAdmin(roles.isAdmin);
+      setIsLegalEditor(roles.isLegalEditor);
       setLoading(false);
     });
 
@@ -33,8 +46,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
         const u = session?.user ? { id: session.user.id, email: session.user.email || '' } : null;
         setUser(u);
-        if (u && u.email === 'abloko362@gmail.com') setIsAdmin(true);
-        else setIsAdmin(false);
+        const roles = computeRoles(u?.email);
+        setIsAdmin(roles.isAdmin);
+        setIsLegalEditor(roles.isLegalEditor);
         setLoading(false);
       });
 
@@ -48,7 +62,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { user, error } = await AuthService.signIn(email, pass);
     if (user) {
        setUser(user);
-       if (user.email === 'abloko362@gmail.com') setIsAdmin(true);
+       const roles = computeRoles(user.email);
+       setIsAdmin(roles.isAdmin);
+       setIsLegalEditor(roles.isLegalEditor);
     }
     return error;
   };
@@ -57,7 +73,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { user, error } = await AuthService.signUp(email, pass);
     if (user) {
        setUser(user);
-       if (user.email === 'abloko362@gmail.com') setIsAdmin(true);
+       const roles = computeRoles(user.email);
+       setIsAdmin(roles.isAdmin);
+       setIsLegalEditor(roles.isLegalEditor);
     }
     return error;
   };
@@ -66,10 +84,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await AuthService.signOut();
     setUser(null);
     setIsAdmin(false);
+    setIsLegalEditor(false);
   };
 
   return (
-    <AuthContext.Provider value={{ user, isAdmin, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, isAdmin, isLegalEditor, loading, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );

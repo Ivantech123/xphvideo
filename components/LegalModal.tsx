@@ -1,16 +1,77 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from './Icon';
 import { useLanguage } from '../contexts/LanguageContext';
+import { LegalDocumentsService, type LegalDocument } from '../services/legalDocumentsService';
+import { sanitizeHtml } from '../services/sanitizeHtml';
 
 interface LegalModalProps {
   onClose: () => void;
+  initialTab?: Tab;
 }
 
 type Tab = 'terms' | '2257' | 'dmca' | 'privacy';
 
-export const LegalModal: React.FC<LegalModalProps> = ({ onClose }) => {
-  const { t } = useLanguage();
-  const [activeTab, setActiveTab] = useState<Tab>('terms');
+export const LegalModal: React.FC<LegalModalProps> = ({ onClose, initialTab }) => {
+  const { t, lang } = useLanguage();
+  const [activeTab, setActiveTab] = useState<Tab>(initialTab || 'terms');
+  const [docs, setDocs] = useState<Record<string, LegalDocument | null>>({});
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const loadedRef = useRef<Set<string>>(new Set());
+
+  const slug = useMemo(() => {
+    if (activeTab === '2257') return '2257';
+    return activeTab;
+  }, [activeTab]);
+
+  const activeDoc = docs[`${slug}:${lang}`] ?? null;
+  const sanitizedHtml = useMemo(() => {
+    const raw = activeDoc?.content_html || '';
+    return raw.trim() ? sanitizeHtml(raw) : '';
+  }, [activeDoc?.content_html]);
+  const lastUpdatedLabel = lang === 'ru' ? 'Обновлено' : 'Last updated';
+
+  useEffect(() => {
+    if (initialTab) setActiveTab(initialTab);
+  }, [initialTab]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchOne = async (targetSlug: string, targetLang: string) => {
+      const key = `${targetSlug}:${targetLang}`;
+      if (loadedRef.current.has(key)) return;
+      loadedRef.current.add(key);
+      const { data, error } = await LegalDocumentsService.get(targetSlug, targetLang);
+      if (cancelled) return;
+      if (error) {
+        setDocs((prev) => ({ ...prev, [key]: null }));
+        return;
+      }
+      setDocs((prev) => ({ ...prev, [key]: data }));
+    };
+
+    setLoading(true);
+    setLoadError(null);
+
+    (async () => {
+      try {
+        await fetchOne(slug, lang);
+
+        // Best-effort prefetch the other tabs for smoother navigation.
+        const slugs: string[] = ['terms', 'privacy', 'dmca', '2257'];
+        await Promise.all(slugs.filter((s) => s !== slug).map((s) => fetchOne(s, lang)));
+      } catch (e: any) {
+        if (!cancelled) setLoadError(e?.message || 'Failed to load policies');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [slug, lang]);
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-0 md:p-4 bg-black/95 backdrop-blur-md animate-fade-in font-sans">
@@ -52,7 +113,36 @@ export const LegalModal: React.FC<LegalModalProps> = ({ onClose }) => {
              </div>
 
              <div className="prose prose-invert prose-sm max-w-none text-gray-400">
-               
+               {loadError && (
+                 <div className="mb-6 bg-red-900/10 border border-red-900/30 p-4 rounded text-sm text-red-200">
+                   {loadError}
+                 </div>
+               )}
+
+               {loading && !activeDoc && (
+                 <div className="space-y-3 animate-pulse">
+                   <div className="h-6 w-52 bg-white/10 rounded" />
+                   <div className="h-3 w-full bg-white/5 rounded" />
+                   <div className="h-3 w-11/12 bg-white/5 rounded" />
+                   <div className="h-3 w-10/12 bg-white/5 rounded" />
+                 </div>
+               )}
+
+               {activeDoc?.content_html?.trim() ? (
+                 <div className="animate-fade-in space-y-6">
+                   <h3 className="text-xl font-serif text-white border-b border-brand-gold/30 pb-2">
+                     {activeDoc.title || (activeTab === 'terms' ? t('terms_title') : activeTab === 'privacy' ? t('privacy_title') : activeTab === 'dmca' ? t('dmca_title') : t('compliance_title'))}
+                   </h3>
+                   <div
+                     className="text-sm leading-relaxed"
+                     dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
+                   />
+                   <div className="text-[11px] text-gray-500 border-t border-white/10 pt-4">
+                     {lastUpdatedLabel}: {new Date(activeDoc.updated_at).toLocaleString()}
+                   </div>
+                 </div>
+               ) : (
+                 <>
                {activeTab === 'terms' && (
                  <div className="animate-fade-in space-y-6">
                     <h3 className="text-xl font-serif text-white border-b border-brand-gold/30 pb-2">{t('terms_title')}</h3>
@@ -106,6 +196,8 @@ export const LegalModal: React.FC<LegalModalProps> = ({ onClose }) => {
                     <h4 className="font-bold text-white text-sm">{t('cookies')}</h4>
                     <p>{t('cookies_text')}</p>
                  </div>
+               )}
+                 </>
                )}
 
              </div>
