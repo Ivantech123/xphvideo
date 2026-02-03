@@ -30,6 +30,11 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose, onVide
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const watchStartRef = useRef<number>(Date.now());
   const lastTimeUpdateSecRef = useRef<number>(-1);
+  const canSubscribe =
+    video?.creator?.subscribable !== false &&
+    !!video?.creator?.id &&
+    video.creator.id !== 'unknown' &&
+    !video.creator.id.startsWith('src_');
 
   const [reportOpen, setReportOpen] = useState(false);
   const [reportType, setReportType] = useState<TicketType>('report');
@@ -92,8 +97,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose, onVide
     setReportMessage('');
     
     setIsFavorite(VideoService.isFavorite(video.id));
-    if (user && video.creator?.id) {
-        SubscriptionService.isSubscribed(video.creator.id).then(setIsSubscribed);
+    if (user && canSubscribe) {
+      SubscriptionService.isSubscribed(video.creator.id).then(setIsSubscribed);
     }
 
     // Resume Playback
@@ -109,18 +114,54 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose, onVide
 
     const loadRelated = async () => {
       try {
-        const tags = video.tags?.slice(0, 3).map(getTagLabel).join(' ') || video.title.split(' ').slice(0, 3).join(' ');
-        const query = tags || 'popular';
-        const vids = await VideoService.getVideos('General', query, 1, 'All', 'trending', 'All', controller.signal);
+        const tagQuery =
+          video.tags?.slice(0, 2).map(getTagLabel).join(' ') ||
+          video.title.split(' ').slice(0, 3).join(' ') ||
+          'popular';
+
+        const tasks: Array<Promise<Video[]>> = [];
+
+        if (video.creator?.id && video.creator.subscribable !== false) {
+          tasks.push(VideoService.getVideosByCreatorId(video.creator.id, 1, 'All', 'trending', 'All', controller.signal));
+        }
+
+        tasks.push(VideoService.getVideos('General', tagQuery, 1, 'All', 'trending', 'All', controller.signal));
+
+        const results = await Promise.all(tasks.map((p) => p.catch(() => [])));
         if (controller.signal.aborted) return;
-        const filtered = vids.filter(v => v.id !== video.id).slice(0, 12);
-        setRelatedVideos(filtered);
+
+        const merged = results.flat();
+        const seen = new Set<string>([video.id]);
+        const out: Video[] = [];
+        for (const v of merged) {
+          if (!v?.id || seen.has(v.id)) continue;
+          seen.add(v.id);
+          out.push(v);
+          if (out.length >= 12) break;
+        }
+
+        setRelatedVideos(out);
       } catch (e) {
         if (controller.signal.aborted) return;
       }
     };
 
-    loadRelated();
+    // Defer related fetch so the player opens instantly.
+    let cancelSchedule: (() => void) | null = null;
+    try {
+      const ric = (globalThis as any).requestIdleCallback as ((cb: () => void, opts?: { timeout?: number }) => any) | undefined;
+      const cic = (globalThis as any).cancelIdleCallback as ((id: any) => void) | undefined;
+
+      if (typeof ric === 'function') {
+        const id = ric(() => loadRelated(), { timeout: 800 });
+        cancelSchedule = () => cic?.(id);
+      } else {
+        const id = setTimeout(() => loadRelated(), 60);
+        cancelSchedule = () => clearTimeout(id);
+      }
+    } catch {
+      loadRelated();
+    }
 
     return () => {
       try {
@@ -129,9 +170,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose, onVide
         const watched = typeof directTime === 'number' && !Number.isNaN(directTime) ? directTime : Math.max(0, approx);
         RecommendationService.trackExit(video, watched);
       } catch {}
+      cancelSchedule?.();
       controller.abort();
     };
-  }, [video, user, requestPause]);
+  }, [video, user, requestPause, canSubscribe]);
 
   const submitReport = async () => {
     setReportError(null);
@@ -162,6 +204,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose, onVide
   };
 
   const toggleSubscribe = async () => {
+    if (!canSubscribe) return;
     if (!user) {
         // Maybe prompt login, but for now just ignore or show toast
         return;
@@ -428,22 +471,38 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ video, onClose, onVide
             
              <div className="flex items-center justify-between py-4 border-b border-brand-border">
                <div className="flex items-center gap-4">
-                  <div className="relative">
-                    <img src={video.creator.avatar} className="w-12 h-12 rounded-full border border-brand-border" />
-                    <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-brand-bg rounded-full"></div>
+                   <div className="relative">
+                     <img
+                       src={video.creator.avatar}
+                       className="w-12 h-12 rounded-full border border-brand-border cursor-pointer"
+                       onClick={handleCreatorClick}
+                     />
+                     <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-brand-bg rounded-full"></div>
+                   </div>
+                   <div>
+                     <h3
+                       onClick={handleCreatorClick}
+                       className="font-bold text-base text-white hover:text-brand-gold cursor-pointer flex items-center gap-1"
+                     >
+                       {video.creator.name}{' '}
+                       {video.creator.verified && <Icon name="BadgeCheck" size={14} className="text-blue-400" />}
+                     </h3>
+                     <span className="text-xs text-gray-500">120K Subscribers</span>
+                   </div>
+                </div>
+                {canSubscribe ? (
+                  <button
+                    onClick={toggleSubscribe}
+                    className={`${isSubscribed ? 'bg-gray-600 hover:bg-gray-500' : 'bg-brand-accent hover:bg-red-600'} text-white px-6 py-2 rounded-full text-sm font-bold uppercase tracking-wide shadow-lg shadow-red-900/20 transition transform hover:scale-105`}
+                  >
+                    {isSubscribed ? t('subscribed') : t('subscribe')}
+                  </button>
+                ) : (
+                  <div className="text-xs text-gray-500 font-bold uppercase tracking-wide">
+                    {t('source') || 'Source'}: {video.source || 'Unknown'}
                   </div>
-                  <div>
-                    <h3 className="font-bold text-base text-white hover:text-brand-gold cursor-pointer flex items-center gap-1">{video.creator.name} {video.creator.verified && <Icon name="BadgeCheck" size={14} className="text-blue-400" />}</h3>
-                    <span className="text-xs text-gray-500">120K Subscribers</span>
-                  </div>
-               </div>
-               <button 
-                 onClick={toggleSubscribe}
-                 className={`${isSubscribed ? 'bg-gray-600 hover:bg-gray-500' : 'bg-brand-accent hover:bg-red-600'} text-white px-6 py-2 rounded-full text-sm font-bold uppercase tracking-wide shadow-lg shadow-red-900/20 transition transform hover:scale-105`}
-               >
-                 {isSubscribed ? t('subscribed') : t('subscribe')}
-               </button>
-            </div>
+                )}
+             </div>
 
             <div className={`bg-brand-surface/50 p-4 rounded-xl text-sm text-gray-300 mt-4 transition-all duration-300 ${isBlurred ? 'blur-md select-none opacity-50' : ''}`}>
                <p className="leading-relaxed">{video.description}</p>

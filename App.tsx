@@ -13,6 +13,7 @@ import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
 import { VideoService } from './services/videoService';
 import { SearchService } from './services/searchService';
 import { RecommendationService } from './services/recommendationService';
+import { FeedCache } from './services/feedCache';
 import { GeoBlock } from './components/GeoBlock';
 import { AuthProvider } from './contexts/AuthContext';
 import { AdUnit } from './components/AdUnit';
@@ -194,6 +195,26 @@ interface HomeProps {
     if (import.meta.env.DEV) console.log(`[MainContent] Loading videos - page: ${page}, query: "${query}", userMode: ${userMode}`);
     setLoading(true);
 
+    const feedCacheKey =
+      page === 1
+        ? FeedCache.makeKey({
+            view: 'home',
+            userMode,
+            query,
+            source: activeSource,
+            sort: activeSort,
+            duration: activeDuration,
+          })
+        : null;
+
+    if (feedCacheKey) {
+      const cached = FeedCache.get(feedCacheKey);
+      if (cached && cached.length > 0) {
+        setVideos(cached);
+        seenIdsRef.current = new Set(cached.map((v) => v.id).filter(Boolean));
+      }
+    }
+
     (async () => {
       const limit = 24;
       const offset = (page - 1) * limit;
@@ -213,22 +234,26 @@ interface HomeProps {
 
           if (controller.signal.aborted || requestId !== requestIdRef.current) return;
 
-          // If catalog isn't ready (RPC missing) or empty results, fallback to legacy fetch.
-          if (!error && indexed.length > 0) {
-            if (exhausted || indexed.length < limit) setHasMore(false);
-            const filtered = indexed.filter(v => {
-              const id = v.id;
-              if (!id) return false;
-              if (seenIdsRef.current.has(id)) return false;
-              seenIdsRef.current.add(id);
-              return true;
-            });
-            if (page === 1) setVideos(filtered);
-            else setVideos((prev) => [...prev, ...filtered]);
-            return;
-          }
-        } catch {
-          // fallthrough to legacy fetch
+           // If catalog isn't ready (RPC missing) or empty results, fallback to legacy fetch.
+           if (!error && indexed.length > 0) {
+             if (exhausted || indexed.length < limit) setHasMore(false);
+             if (page === 1) seenIdsRef.current = new Set();
+             const filtered = indexed.filter(v => {
+               const id = v.id;
+               if (!id) return false;
+               if (seenIdsRef.current.has(id)) return false;
+               seenIdsRef.current.add(id);
+               return true;
+             });
+             if (page === 1) {
+               setVideos(filtered);
+               if (feedCacheKey) FeedCache.set(feedCacheKey, filtered);
+             }
+             else setVideos((prev) => [...prev, ...filtered]);
+             return;
+           }
+         } catch {
+           // fallthrough to legacy fetch
         }
       }
 
@@ -236,6 +261,7 @@ interface HomeProps {
         const vids = await VideoService.getVideos(userMode, query, page, activeSource, activeSort, activeDuration, controller.signal);
         if (controller.signal.aborted || requestId !== requestIdRef.current) return;
         if (vids.length === 0) setHasMore(false);
+        if (page === 1) seenIdsRef.current = new Set();
         const filtered = vids.filter(v => {
           const id = v.id;
           if (!id) return false;
@@ -243,7 +269,10 @@ interface HomeProps {
           seenIdsRef.current.add(id);
           return true;
         });
-        if (page === 1) setVideos(filtered);
+        if (page === 1) {
+          setVideos(filtered);
+          if (feedCacheKey) FeedCache.set(feedCacheKey, filtered);
+        }
         else setVideos((prev) => [...prev, ...filtered]);
       } catch {
         if (controller.signal.aborted || requestId !== requestIdRef.current) return;
@@ -316,7 +345,6 @@ interface HomeProps {
     }
 
     const limitPerSection = 9;
-    setHomeSectionsLoading(true);
 
     const fetchSection = async (seed: { id: string; title: string; query: string; sort?: 'trending' | 'new' | 'best'; showQuery?: boolean }) => {
       const sort = seed.sort || 'trending';
@@ -353,27 +381,51 @@ interface HomeProps {
       return null;
     };
 
-    Promise.all(seeds.slice(0, maxSections).map(fetchSection))
-      .then((results) => {
-        if (controller.signal.aborted || requestId !== homeRequestIdRef.current) return;
-        const seen = new Set<string>();
-        const sections = (results.filter(Boolean) as Array<{ id: string; title: string; query: string; videos: Video[]; showQuery?: boolean }>)
-          .map((section) => {
-            const unique = section.videos.filter((v) => {
-              if (!v.id) return false;
-              if (seen.has(v.id)) return false;
-              seen.add(v.id);
-              return true;
-            });
-            return { ...section, videos: unique.slice(0, 8) };
-          })
-          .filter((section) => section.videos.length > 0);
-        setHomeSections(sections);
-      })
-      .finally(() => {
-        if (controller.signal.aborted || requestId !== homeRequestIdRef.current) return;
-        setHomeSectionsLoading(false);
-      });
+    const run = () => {
+      setHomeSectionsLoading(true);
+      Promise.all(seeds.slice(0, maxSections).map(fetchSection))
+        .then((results) => {
+          if (controller.signal.aborted || requestId !== homeRequestIdRef.current) return;
+          const seen = new Set<string>();
+          const sections = (results.filter(Boolean) as Array<{ id: string; title: string; query: string; videos: Video[]; showQuery?: boolean }>)
+            .map((section) => {
+              const unique = section.videos.filter((v) => {
+                if (!v.id) return false;
+                if (seen.has(v.id)) return false;
+                seen.add(v.id);
+                return true;
+              });
+              return { ...section, videos: unique.slice(0, 8) };
+            })
+            .filter((section) => section.videos.length > 0);
+          setHomeSections(sections);
+        })
+        .finally(() => {
+          if (controller.signal.aborted || requestId !== homeRequestIdRef.current) return;
+          setHomeSectionsLoading(false);
+        });
+    };
+
+    let cancelSchedule: (() => void) | null = null;
+    try {
+      const ric = (globalThis as any).requestIdleCallback as ((cb: () => void, opts?: { timeout?: number }) => any) | undefined;
+      const cic = (globalThis as any).cancelIdleCallback as ((id: any) => void) | undefined;
+
+      if (typeof ric === 'function') {
+        const id = ric(() => run(), { timeout: 1200 });
+        cancelSchedule = () => cic?.(id);
+      } else {
+        const id = setTimeout(() => run(), 120);
+        cancelSchedule = () => clearTimeout(id);
+      }
+    } catch {
+      run();
+    }
+
+    return () => {
+      cancelSchedule?.();
+      controller.abort();
+    };
   }, [showHomeSections, userMode, activeSource, activeDuration, t]);
 
   // Render Logic based on View
@@ -939,21 +991,22 @@ const VelvetApp = () => {
                 onSearch={setSearchQuery}
              />
              
-             <Sidebar 
-               isOpen={isSidebarOpen} 
-               isMobile={isMobile}
-               onRequestClose={closeSidebar}
-               currentView={currentView}
-               onChangeView={(view) => { 
+              <Sidebar 
+                isOpen={isSidebarOpen} 
+                isMobile={isMobile}
+                onRequestClose={closeSidebar}
+                currentView={currentView}
+                onChangeView={(view) => { 
                  if (import.meta.env.DEV) console.log('[App] onChangeView called with:', view);
                  setCurrentView(view); 
                  setCurrentVideo(null); 
                  setCurrentCreator(null); 
                  setSearchQuery(''); 
-               }}
-               onSearch={setSearchQuery}
-               searchQuery={searchQuery}
-             />
+                }}
+                onCreatorClick={handleCreatorClick}
+                onSearch={setSearchQuery}
+                searchQuery={searchQuery}
+              />
 
              <main className={`pt-16 transition-all duration-300 ${isSidebarOpen ? 'md:ml-60' : 'md:ml-20'}`}>
                 {currentVideo ? (

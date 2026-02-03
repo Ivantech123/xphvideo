@@ -9,6 +9,13 @@ export interface Subscription {
   created_at: string;
 }
 
+const emitSubscriptionsChanged = () => {
+  try {
+    if (typeof window === 'undefined') return;
+    window.dispatchEvent(new Event('velvet_subscriptions_changed'));
+  } catch {}
+};
+
 export const SubscriptionService = {
   async subscribe(creatorId: string, creatorName: string, creatorAvatar?: string): Promise<{ data: Subscription | null; error: string | null }> {
     if (!supabase) return { data: null, error: 'Supabase not initialized' };
@@ -30,11 +37,13 @@ export const SubscriptionService = {
     if (error) {
         // If already subscribed, return success-like response or specific error
         if (error.code === '23505') { // Unique violation
+            emitSubscriptionsChanged();
             return { data: null, error: 'Already subscribed' };
         }
         return { data: null, error: error.message };
     }
 
+    emitSubscriptionsChanged();
     return { data, error: null };
   },
 
@@ -50,6 +59,7 @@ export const SubscriptionService = {
       .eq('user_id', user.id)
       .eq('creator_id', creatorId);
 
+    if (!error) emitSubscriptionsChanged();
     return { error: error ? error.message : null };
   },
 

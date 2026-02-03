@@ -2,6 +2,7 @@ import { supabase } from './supabase';
 import { Video } from '../types';
 import { CATEGORY_MAP } from './categoryMap';
 import { RecommendationService } from './recommendationService';
+import { makeCreatorFromCatalog } from './creatorUtils';
 
 const norm = (s: string) => s.trim().toLowerCase();
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
@@ -271,6 +272,13 @@ export const SearchService = {
       }
 
       let batch: RankedItem[] = rows.map((r) => {
+        const creator = makeCreatorFromCatalog({
+          source: r.source,
+          creator_id: r.creator_id,
+          creator_name: r.creator_name,
+          creator_avatar: r.creator_avatar,
+        });
+
         const video: Video = {
           id: r.id,
           title: r.title || '',
@@ -280,13 +288,7 @@ export const SearchService = {
           videoUrl: r.video_url || undefined,
           source: (r.source as any) || undefined,
           duration: r.duration || 0,
-          creator: {
-            id: r.creator_id || r.creator_name || 'unknown',
-            name: r.creator_name || 'Unknown',
-            avatar: r.creator_avatar || 'https://via.placeholder.com/80',
-            verified: false,
-            tier: 'Standard',
-          },
+          creator,
           tags: (r.tags || []).map((t) => ({ id: t, label: t })),
           views: (r.views as any) || 0,
           rating: (r.rating as any) || undefined,

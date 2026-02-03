@@ -32,6 +32,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile = false, curr
     }
   }, [user, isOpen]); // Refresh when sidebar opens or user changes
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handler = () => {
+      if (user) SubscriptionService.getSubscriptions().then(setSubscriptions);
+    };
+    window.addEventListener('velvet_subscriptions_changed', handler);
+    return () => window.removeEventListener('velvet_subscriptions_changed', handler);
+  }, [user]);
+
   const sidebarClass = isOpen 
     ? "w-60 translate-x-0" 
     : "w-0 -translate-x-full md:w-20 md:translate-x-0";

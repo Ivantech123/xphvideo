@@ -19,6 +19,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ creator, onVideoClick,
   const [videos, setVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSubscribed, setIsSubscribed] = useState(false);
+  const canSubscribe = creator?.subscribable !== false;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -26,12 +27,12 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ creator, onVideoClick,
     const loadData = async () => {
       setLoading(true);
       try {
-        // Fetch videos by creator name
-        const vids = await VideoService.getVideos('General', creator.name, 1, 'All', 'trending', 'All', controller.signal);
+        // Fetch videos by creator id (stable across sources and works with catalog).
+        const vids = await VideoService.getVideosByCreatorId(creator.id, 1, 'All', 'trending', 'All', controller.signal);
         if (controller.signal.aborted) return;
         setVideos(vids);
         
-        if (user) {
+        if (user && canSubscribe && creator?.id) {
           const subbed = await SubscriptionService.isSubscribed(creator.id);
           if (controller.signal.aborted) return;
           setIsSubscribed(subbed);
@@ -42,9 +43,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ creator, onVideoClick,
     };
     loadData();
     return () => controller.abort();
-  }, [creator, user]);
+  }, [creator, user, canSubscribe]);
 
   const toggleSubscribe = async () => {
+    if (!canSubscribe) return;
     if (!user) return; // TODO: Show auth modal
     
     if (isSubscribed) {
@@ -85,22 +87,30 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ creator, onVideoClick,
             </h1>
             <div className="flex items-center gap-4 text-sm text-gray-400 mt-2">
               <span>{creator.tier} Model</span>
-              {creator.stats && <span>• {creator.stats.videos} Videos</span>}
-              {creator.stats && <span>• {(creator.stats.views / 1000000).toFixed(1)}M Views</span>}
+              {creator.stats?.videos ? <span>• {creator.stats.videos} Videos</span> : null}
+              {typeof creator.stats?.views === 'number' && creator.stats.views > 0 ? (
+                <span>• {(creator.stats.views / 1000000).toFixed(1)}M Views</span>
+              ) : null}
             </div>
           </div>
 
           <div className="mb-2">
-             <button 
-               onClick={toggleSubscribe}
-               className={`${isSubscribed ? 'bg-gray-700 hover:bg-gray-600' : 'bg-brand-accent hover:bg-red-600'} text-white px-8 py-3 rounded-full font-bold uppercase tracking-wider shadow-lg transition transform hover:scale-105 flex items-center gap-2`}
-             >
-               {isSubscribed ? (
-                 <><Icon name="Check" size={18} /> {t('subscribed')}</>
-               ) : (
-                 <><Icon name="Bell" size={18} /> {t('subscribe')}</>
-               )}
-             </button>
+            {canSubscribe ? (
+              <button
+                onClick={toggleSubscribe}
+                className={`${isSubscribed ? 'bg-gray-700 hover:bg-gray-600' : 'bg-brand-accent hover:bg-red-600'} text-white px-8 py-3 rounded-full font-bold uppercase tracking-wider shadow-lg transition transform hover:scale-105 flex items-center gap-2`}
+              >
+                {isSubscribed ? (
+                  <><Icon name="Check" size={18} /> {t('subscribed')}</>
+                ) : (
+                  <><Icon name="Bell" size={18} /> {t('subscribe')}</>
+                )}
+              </button>
+            ) : (
+              <div className="px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider border border-white/10 text-gray-400">
+                {t('source') || 'Source'}: {videos?.[0]?.source || 'Unknown'}
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -4,6 +4,7 @@ export interface Creator {
   avatar: string;
   verified: boolean;
   tier: 'Standard' | 'Premium' | 'Exclusive';
+  subscribable?: boolean;
   stats?: {
     videos: number;
     views: number;
